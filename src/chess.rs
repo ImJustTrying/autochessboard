@@ -32,6 +32,14 @@ pub struct Board {
 }
 
 impl Board {
+    pub fn get_player_turn_str(&self) -> &str {
+      if self.turn {
+        "White"
+      } else {
+        "Black"
+      }
+    }
+
     // We assume that the move is valid in the sense that both m.old_pos and m.new_pos are actual
     // positions on the board, and the moving piece is not an empty one (i.e. not Piece::Empty).
     pub fn is_valid_move(&self, m: &Move) -> bool {
@@ -42,23 +50,44 @@ impl Board {
         match m.moving_piece {
             Piece::Empty => false,
             Piece::Pawn{is_white, ..} => {
+                if is_white != self.turn {
+                  return false;
+                }
                 let is_taking_piece: bool = match m.taken_piece {
                     Some(_) => true,
                     None => false
                 };
                 let moving_forward: bool;
                 let first_move: bool;
+                let last_move_moves_two_spaces: bool;
+                let is_taking_with_en_passant: bool;
 
                 if is_white {
                     first_move = m.old_pos.0 == 6;
                     moving_forward = m.old_pos.0 == m.new_pos.0 + 1;
+                    last_move_moves_two_spaces = self.last_move.old_pos.0 == self.last_move.new_pos.0 - 2;
+                    is_taking_with_en_passant = m.new_pos == (self.last_move.old_pos.0 + 1, self.last_move.old_pos.1);
                 } else {
                     first_move = m.old_pos.0 == 1;
                     moving_forward = m.old_pos.0 == m.new_pos.0 - 1;
+                    last_move_moves_two_spaces = self.last_move.old_pos.0 == self.last_move.new_pos.0 + 2;
+                    is_taking_with_en_passant = m.new_pos == (self.last_move.old_pos.0 - 1, self.last_move.old_pos.1);
                 }
+
                 let only_moving_forward = moving_forward && m.old_pos.1 == m.new_pos.1;
                 let moving_left = moving_forward && m.old_pos.1 == m.new_pos.1 + 1;
                 let moving_right = moving_forward && m.old_pos.1 == m.new_pos.1 - 1;
+
+                // Check if the last move was a first move two spaces forward by an opponent pawn
+                // to validate en passant
+                let last_move_is_pawn = match self.last_move.moving_piece {
+                    Piece::Pawn{..} => true,
+                    _ => false
+                };
+                let last_move_only_forward = self.last_move.old_pos.1 == self.last_move.new_pos.1;
+                let last_move_allows_en_passant = last_move_is_pawn && last_move_only_forward &&
+                  last_move_moves_two_spaces;
+                println!("en passant possible: {}\ntaking with en passant: {}", last_move_allows_en_passant, is_taking_with_en_passant);
 
                 if first_move && !is_taking_piece {
                     let old_row: usize = m.old_pos.0 as usize;
@@ -76,10 +105,16 @@ impl Board {
                           && self.board[old_row + 2][old_col] == Piece::Empty;
                     }
                     only_moving_forward || moving_two_spaces && spaces_are_empty
+                } else if last_move_allows_en_passant {
+                    let valid_move = moving_left || moving_right && is_taking_with_en_passant;
+                    if valid_move {
+                      m.taken_piece = Some();
+                    }
+                    valid_move
                 } else if !is_taking_piece {
                     only_moving_forward
                 } else {
-                    moving_left || moving_right
+                    moving_left || moving_right 
                 }
             },
 
@@ -87,6 +122,7 @@ impl Board {
         }
     }
 
+    // TODO: we detect en passant moves correctly, but we need to actually remove the taken piece.
     pub fn make_move(&mut self, m: &Move) -> bool {
         if self.is_valid_move(m) {
             self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
@@ -107,6 +143,7 @@ impl Board {
                 },
                 None => {}
             };
+            self.turn = !self.turn;
             true
         } else {
             false
@@ -168,7 +205,8 @@ impl Default for Board {
                 new_pos: (0,0)
             },
             white_pieces: Vec::new(),
-            black_pieces: Vec::new()
+            black_pieces: Vec::new(),
+            turn: true
         }
     }
 }

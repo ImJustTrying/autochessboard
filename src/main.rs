@@ -69,7 +69,7 @@ fn main() {
 
     loop {
         println!("{}", board);
-        print!("Enter move > ");
+        print!("({}'s turn) Enter move > ", board.get_player_turn_str());
         io::stdout().flush().expect("IO error during flush");
         let mut input = String::new();
 
