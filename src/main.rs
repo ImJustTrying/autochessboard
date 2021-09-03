@@ -9,7 +9,8 @@ fn parse_move(s: String, b: &Board) -> Option<Move> {
         moving_piece: Piece::Empty,
         taken_piece: None,
         old_pos: (0,0),
-        new_pos: (0,0)
+        new_pos: (0,0),
+        taken_pos: (0,0)
     };
     let mut num_parameters: u8 = 0;
 
@@ -55,7 +56,7 @@ fn parse_move(s: String, b: &Board) -> Option<Move> {
                 m.new_pos.1 = col_index as i8;
                 m.taken_piece = match b.board[row_index][col_index] {
                     Piece::Empty => None,
-                    _ => Some(b.board[row_index][col_index])
+                    _ => Some(b.board[row_index][col_index]) 
                 };
             }
         }
@@ -81,10 +82,9 @@ fn main() {
                     let parsed: Option<Move> = parse_move(input, &board);
                     match parsed {
                         None => eprintln!("Failed to parse input"),
-                        Some(m) => {
-                            let validity: bool = board.is_valid_move(&m);
-                            let successful_move: bool = board.make_move(&m);
-                            println!("move: {}, validity: {}, move success: {}", m, validity, successful_move);
+                        Some(mut m) => {
+                            let successful_move: bool = board.make_move(&mut m);
+                            println!("move: {}, move success: {}", m, successful_move);
                         }
                     }
                 }

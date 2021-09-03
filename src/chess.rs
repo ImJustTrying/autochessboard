@@ -1,13 +1,14 @@
 use std::fmt;
+use std::io::{self, Write};
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum Piece {
-    Pawn   { is_white: bool, value: u8 },
-    Bishop { is_white: bool, value: u8 },
-    Knight { is_white: bool, value: u8 },
-    Rook   { is_white: bool, value: u8 },
-    Queen  { is_white: bool, value: u8 },
-    King   { is_white: bool, value: u8 },
+    Pawn   { is_white: bool },
+    Bishop { is_white: bool },
+    Knight { is_white: bool },
+    Rook   { is_white: bool },
+    Queen  { is_white: bool },
+    King   { is_white: bool },
     Empty
 }
 
@@ -16,7 +17,8 @@ pub struct Move {
     pub moving_piece: Piece,
     pub taken_piece: Option<Piece>,
     pub old_pos: (i8, i8),
-    pub new_pos: (i8, i8)
+    pub new_pos: (i8, i8),
+    pub taken_pos: (i8, i8)
 }
 
 pub struct Board {
@@ -42,27 +44,36 @@ impl Board {
 
     // We assume that the move is valid in the sense that both m.old_pos and m.new_pos are actual
     // positions on the board, and the moving piece is not an empty one (i.e. not Piece::Empty).
-    pub fn is_valid_move(&self, m: &Move) -> bool {
+    fn is_valid_move(&self, m: &mut Move) -> bool {
         if m.old_pos.0 == m.new_pos.0 && m.old_pos.1 == m.new_pos.1 {
             return false;
         }
 
         match m.moving_piece {
             Piece::Empty => false,
-            Piece::Pawn{is_white, ..} => {
-                if is_white != self.turn {
+            Piece::Pawn{is_white: pawn_is_white} => {
+                if pawn_is_white != self.turn {
                   return false;
                 }
+                let is_taking_different_color: bool;
                 let is_taking_piece: bool = match m.taken_piece {
-                    Some(_) => true,
-                    None => false
+                    Some(p) => match p {
+                        Piece::Empty => { is_taking_different_color = false; false },
+                        Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
+                        Piece::King   {is_white} | Piece::Queen  {is_white} |
+                        Piece::Bishop {is_white} | Piece::Knight {is_white} => {
+                            is_taking_different_color = is_white != pawn_is_white;
+                            true
+                        }
+                    },
+                    None => { is_taking_different_color = false; false }
                 };
                 let moving_forward: bool;
                 let first_move: bool;
                 let last_move_moves_two_spaces: bool;
                 let is_taking_with_en_passant: bool;
 
-                if is_white {
+                if pawn_is_white {
                     first_move = m.old_pos.0 == 6;
                     moving_forward = m.old_pos.0 == m.new_pos.0 + 1;
                     last_move_moves_two_spaces = self.last_move.old_pos.0 == self.last_move.new_pos.0 - 2;
@@ -95,7 +106,7 @@ impl Board {
                     let moving_two_spaces; 
                     let spaces_are_empty;
 
-                    if is_white {
+                    if pawn_is_white {
                         moving_two_spaces = m.old_pos.0 == m.new_pos.0 + 2 && m.old_pos.1 == m.new_pos.1;
                         spaces_are_empty = self.board[old_row - 1][old_col] == Piece::Empty
                           && self.board[old_row - 2][old_col] == Piece::Empty;
@@ -105,45 +116,130 @@ impl Board {
                           && self.board[old_row + 2][old_col] == Piece::Empty;
                     }
                     only_moving_forward || moving_two_spaces && spaces_are_empty
-                } else if last_move_allows_en_passant {
-                    let valid_move = moving_left || moving_right && is_taking_with_en_passant;
+                } else if last_move_allows_en_passant && is_taking_with_en_passant {
+                    let valid_move = moving_left || moving_right;
                     if valid_move {
-                      m.taken_piece = Some();
+                      m.taken_piece = Some(self.last_move.moving_piece);
+                      m.taken_pos = self.last_move.new_pos;
                     }
                     valid_move
-                } else if !is_taking_piece {
-                    only_moving_forward
+                } else if is_taking_piece {
+                    (moving_left || moving_right) && is_taking_different_color
                 } else {
-                    moving_left || moving_right 
+                    only_moving_forward
                 }
             },
 
+            Piece::Knight{is_white: knight_white} => {
+                if knight_white != self.turn {
+                  return false;
+                }
+                // These are the differences (delta x, delta y) between every possible position the
+                // knight can move to and its current position.
+                let possible_position_deltas = [(1,2), (1,-2), (-1,2), (-1,-2), (2,1), (2,-1),
+                  (-2,1), (-2,-1)];
+                for delta in possible_position_deltas.iter() {
+                    let new_row = m.old_pos.0 + delta.0;
+                    let new_col = m.old_pos.1 + delta.1;
+                    if new_row < 0 || new_row > 7 || new_col < 0 || new_col > 7 {
+                        continue;
+                    }
+                    // check that the new position is not occupied by piece of the same color
+                    match self.board[new_row as usize][new_col as usize] {
+                        Piece::Empty => return true,
+                        Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
+                        Piece::King   {is_white} | Piece::Queen  {is_white} |
+                        Piece::Bishop {is_white} | Piece::Knight {is_white} => {
+                            if is_white != knight_white { return true; }
+                        }
+                    };
+                }
+                false
+            },
+
+            Piece::Bishop{is_white} => {
+                false
+            }
             _ => false
         }
     }
 
-    // TODO: we detect en passant moves correctly, but we need to actually remove the taken piece.
-    pub fn make_move(&mut self, m: &Move) -> bool {
+    pub fn make_move(&mut self, m: &mut Move) -> bool {
         if self.is_valid_move(m) {
-            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
             self.board[m.old_pos.0 as usize][m.old_pos.1 as usize] = Piece::Empty;
+            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
             self.last_move = *m;
             match m.taken_piece {
-                Some(p) => match p {
-                    Piece::Pawn   {is_white, ..} | Piece::Rook   {is_white, ..} |
-                    Piece::King   {is_white, ..} | Piece::Queen  {is_white, ..} |
-                    Piece::Bishop {is_white, ..} | Piece::Knight {is_white, ..} => {
-                        if is_white {
-                            self.black_pieces.push(p);
-                        } else {
-                            self.white_pieces.push(p);
-                        }
-                    },
-                    Piece::Empty => {}
+                Some(p) => {
+                    self.board[m.taken_pos.0 as usize][m.taken_pos.1 as usize] = Piece::Empty;
+                    match p {
+                        Piece::Pawn   {is_white, ..} | Piece::Rook   {is_white, ..} |
+                        Piece::King   {is_white, ..} | Piece::Queen  {is_white, ..} |
+                        Piece::Bishop {is_white, ..} | Piece::Knight {is_white, ..} => {
+                            if is_white {
+                                self.black_pieces.push(p);
+                            } else {
+                                self.white_pieces.push(p);
+                            }
+                        },
+                        _ => {}
+                    };
                 },
                 None => {}
             };
             self.turn = !self.turn;
+
+            // Determine if pawn promotion should occur
+            match m.moving_piece {
+                Piece::Pawn{is_white, ..} => {
+                    // if the pawn gets to the opposite side of the board, promote
+                    if (is_white && m.new_pos.0 == 0) || (!is_white && m.new_pos.0 == 7) {
+                        loop {
+                            println!("Which piece would you like to upgrade to? (Q/q = Queen, K/k = \
+                              Knight, B/b = Bishop, R/r = Rook");
+                            print!("Enter piece > ");
+                            io::stdout().flush().expect("IO error during flush");
+                            let mut input = String::new();
+                            match io::stdin().read_line(&mut input) {
+                                Ok(n) => {
+                                    if n != 2 {
+                                        eprintln!("Invalid input: incorrect input length");
+                                        continue;
+                                    }
+                                    match &input[0..1] {
+                                        "Q" | "q" => {
+                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                            Piece::Queen{is_white};
+                                            break;
+                                        }
+                                        "R" | "r" => {
+                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                            Piece::Rook{is_white};
+                                            break;
+                                        }
+                                        "B" | "b" => {
+                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                            Piece::Bishop{is_white};
+                                            break;
+                                        }
+                                        "K" | "k" => {
+                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                            Piece::Knight{is_white};
+                                            break;
+                                        }
+                                        _ => {
+                                            eprintln!("Invalid input: invalid value supplied");
+                                            continue;
+                                        }
+                                    }
+                                },
+                                Err(e) => { println!("Error: {}", e) }
+                            }
+                        }
+                    }
+                },
+                _ => {}
+            };
             true
         } else {
             false
@@ -153,14 +249,7 @@ impl Board {
     // Returns (white score, black score)
     pub fn get_score(&self) -> (u8, u8) {
         let f = |acc: u8, piece: &Piece| {
-            match piece {
-                Piece::Pawn   {value, ..} | Piece::Rook   {value, ..} |
-                Piece::King   {value, ..} | Piece::Queen  {value, ..} |
-                Piece::Bishop {value, ..} | Piece::Knight {value, ..} => {
-                    acc + value
-                },
-                _ => acc
-            }
+            acc + piece_value(piece)
         };
         (self.white_pieces.iter().fold(0, f), self.black_pieces.iter().fold(0, f))
     }
@@ -173,24 +262,24 @@ impl Default for Board {
         // Setup the initial state of the board
         while i < 8 {
             let initial_black_piece: Piece = match i {
-                0 | 7 => Piece::Rook   { is_white: false, value: 5  },
-                1 | 6 => Piece::Knight { is_white: false, value: 3  },
-                2 | 5 => Piece::Bishop { is_white: false, value: 3  },
-                3     => Piece::Queen  { is_white: false, value: 10 },
-                4     => Piece::King   { is_white: false, value: 0  },
+                0 | 7 => Piece::Rook   { is_white: false },
+                1 | 6 => Piece::Knight { is_white: false },
+                2 | 5 => Piece::Bishop { is_white: false },
+                3     => Piece::Queen  { is_white: false },
+                4     => Piece::King   { is_white: false },
                 _ => Piece::Empty
             };
             let initial_white_piece: Piece = match i {
-                0 | 7 => Piece::Rook   { is_white: true, value: 5  },
-                1 | 6 => Piece::Knight { is_white: true, value: 3  },
-                2 | 5 => Piece::Bishop { is_white: true, value: 3  },
-                3     => Piece::Queen  { is_white: true, value: 10 },
-                4     => Piece::King   { is_white: true, value: 0  },
+                0 | 7 => Piece::Rook   { is_white: true },
+                1 | 6 => Piece::Knight { is_white: true },
+                2 | 5 => Piece::Bishop { is_white: true },
+                3     => Piece::Queen  { is_white: true },
+                4     => Piece::King   { is_white: true },
                 _ => Piece::Empty
             };
 
-            default_board[1][i] = Piece::Pawn { is_white: false, value: 1 };
-            default_board[6][i] = Piece::Pawn { is_white: true, value: 1 };
+            default_board[1][i] = Piece::Pawn { is_white: false };
+            default_board[6][i] = Piece::Pawn { is_white: true };
             default_board[0][i] = initial_black_piece;
             default_board[7][i] = initial_white_piece;
             i += 1;
@@ -202,7 +291,8 @@ impl Default for Board {
                 moving_piece: Piece::Empty,
                 taken_piece: None,
                 old_pos: (0,0),
-                new_pos: (0,0)
+                new_pos: (0,0),
+                taken_pos: (0,0),
             },
             white_pieces: Vec::new(),
             black_pieces: Vec::new(),
@@ -280,21 +370,32 @@ impl fmt::Display for Move {
     }
 }
 
+fn piece_value(piece: &Piece) -> u8 {
+    match piece {
+        Piece::Empty => 0,
+        Piece::Pawn{..}   => 1,
+        Piece::Knight{..} => 3,
+        Piece::Bishop{..} => 3,
+        Piece::Rook{..}   => 5,
+        Piece::Queen{..}  => 10,
+        Piece::King{..}   => 0
+    }
+}
 
 fn piece_to_unicode(piece: &Piece) -> char {
-    const EMPTY_PIECE: char = '.';
-    const WHITE_KING: char = '\u{2654}';
-    const WHITE_QUEEN: char = '\u{2655}';
-    const WHITE_ROOK: char = '\u{2656}';
+    const EMPTY_PIECE:  char = '.';
+    const WHITE_KING:   char = '\u{2654}';
+    const WHITE_QUEEN:  char = '\u{2655}';
+    const WHITE_ROOK:   char = '\u{2656}';
     const WHITE_BISHOP: char = '\u{2657}';
     const WHITE_KNIGHT: char = '\u{2658}';
-    const WHITE_PAWN: char = '\u{2659}';
-    const BLACK_KING: char = '\u{265A}';
-    const BLACK_QUEEN: char = '\u{265B}';
-    const BLACK_ROOK: char = '\u{265C}';
+    const WHITE_PAWN:   char = '\u{2659}';
+    const BLACK_KING:   char = '\u{265A}';
+    const BLACK_QUEEN:  char = '\u{265B}';
+    const BLACK_ROOK:   char = '\u{265C}';
     const BLACK_BISHOP: char = '\u{265D}';
     const BLACK_KNIGHT: char = '\u{265E}';
-    const BLACK_PAWN: char = '\u{265F}';
+    const BLACK_PAWN:   char = '\u{265F}';
 
     let get_piece_char = |is_white: &bool, white: char, black: char| -> char {
         if *is_white {
