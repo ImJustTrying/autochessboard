@@ -54,6 +54,8 @@ fn parse_move(s: String, b: &Board) -> Option<Move> {
             } else {
                 m.new_pos.0 = row_index as i8;
                 m.new_pos.1 = col_index as i8;
+                m.taken_pos.0 = m.new_pos.0;
+                m.taken_pos.1 = m.new_pos.1;
                 m.taken_piece = match b.board[row_index][col_index] {
                     Piece::Empty => None,
                     _ => Some(b.board[row_index][col_index]) 

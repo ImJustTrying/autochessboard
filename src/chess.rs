@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io::{self, Write};
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Piece {
     Pawn   { is_white: bool },
     Bishop { is_white: bool },
@@ -12,7 +12,7 @@ pub enum Piece {
     Empty
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Move {
     pub moving_piece: Piece,
     pub taken_piece: Option<Piece>,
@@ -48,11 +48,94 @@ impl Board {
         if m.old_pos.0 == m.new_pos.0 && m.old_pos.1 == m.new_pos.1 {
             return false;
         }
+        let check_bishop = |bishop_white: bool| {
+            // Let (x_i, y_i) be the initial position of the bishop, and (x_f, y_f) be the
+            // final position. Then the move is valid if and only if |x_f - x_i| = |y_f - y_i|.
+            // This fact embodies the idea of only moving along the diagonals on the board.
+            // We assume the board is empty in the above theorem.
+            let delta_row: i8 = (m.new_pos.0 as i8 - m.old_pos.0 as i8).abs();
+            let delta_col: i8 = (m.new_pos.1 as i8 - m.old_pos.1 as i8).abs();
+            if delta_row != delta_col { return false; }
+
+            let dr: i8 = if m.new_pos.0 > m.old_pos.0 { 1 } else { -1 };
+            let dc: i8 = if m.new_pos.1 > m.old_pos.1 { 1 } else { -1 };
+            let mut pos = m.old_pos;
+            loop {
+                pos.0 += dr;
+                pos.1 += dc;
+                if pos == m.new_pos {
+                    // Check that the final position is not occupied by a piece of the same
+                    // color
+                    return call_on_empty_status(
+                      &self.board[pos.0 as usize][pos.1 as usize],
+                      || -> bool { true },
+                      |is_white: bool| -> bool { bishop_white != is_white }
+                    );
+                } else if self.board[pos.0 as usize][pos.1 as usize] != Piece::Empty {
+                    return false;
+                }
+                if pos.0 > 7 || pos.0 < 0 || pos.1 > 7 || pos.1 < 0 {
+                    return false;
+                }
+            }
+        };
+
+        let check_rook = |rook_white: bool| -> bool {
+            // Let (x_i, y_i) be the initial position of the rook, and (x_f, y_f) be the
+            // final position. Then the move is valid if and only if either |x_f - x_i|, or
+            // |y_f - y_i| is zero, and the other is nonzero. This fact embodies the idea of
+            // only moving along the rows and columns on the board. We assume the board is
+            // empty in the above theorem.
+            let delta_row: i8 = (m.new_pos.0 as i8 - m.old_pos.0 as i8).abs();
+            let delta_col: i8 = (m.new_pos.1 as i8 - m.old_pos.1 as i8).abs();
+            if !(delta_row == 0 && delta_col != 0 || delta_row != 0 && delta_col == 0) {
+                return false;
+            }
+
+            let mut var_pos: i8;
+            let const_pos: i8;
+            let d: i8;
+            if delta_row == 0 {
+                const_pos = m.old_pos.0;
+                var_pos = m.old_pos.1;
+                d = if m.new_pos.1 > m.old_pos.1 { 1 } else { -1 };
+            } else {
+                const_pos = m.old_pos.1;
+                var_pos = m.old_pos.0;
+                d = if m.new_pos.0 > m.old_pos.0 { 1 } else { -1 };
+            }
+
+            loop {
+                var_pos += d;
+                if delta_row == 0 {
+                    if var_pos == m.new_pos.1 {
+                        return call_on_empty_status(
+                          &self.board[const_pos as usize][var_pos as usize],
+                          || -> bool {true},
+                          |is_white: bool| -> bool { is_white != rook_white }
+                        );
+                    } else if self.board[const_pos as usize][var_pos as usize] != Piece::Empty {
+                        return false;
+                    }
+                } else {
+                    if var_pos == m.new_pos.0 {
+                        return call_on_empty_status(
+                          &self.board[var_pos as usize][const_pos as usize],
+                          || -> bool {true},
+                          |is_white: bool| -> bool { is_white != rook_white }
+                        );
+                    } else if self.board[var_pos as usize][const_pos as usize] != Piece::Empty {
+                        return false;
+                    }
+                }
+                if var_pos < 0 || var_pos > 7 { return false; }
+            }
+        };
 
         match m.moving_piece {
             Piece::Empty => false,
-            Piece::Pawn{is_white: pawn_is_white} => {
-                if pawn_is_white != self.turn {
+            Piece::Pawn{is_white: pawn_white} => {
+                if pawn_white != self.turn {
                   return false;
                 }
                 let is_taking_different_color: bool;
@@ -62,7 +145,7 @@ impl Board {
                         Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
                         Piece::King   {is_white} | Piece::Queen  {is_white} |
                         Piece::Bishop {is_white} | Piece::Knight {is_white} => {
-                            is_taking_different_color = is_white != pawn_is_white;
+                            is_taking_different_color = is_white != pawn_white;
                             true
                         }
                     },
@@ -73,7 +156,7 @@ impl Board {
                 let last_move_moves_two_spaces: bool;
                 let is_taking_with_en_passant: bool;
 
-                if pawn_is_white {
+                if pawn_white {
                     first_move = m.old_pos.0 == 6;
                     moving_forward = m.old_pos.0 == m.new_pos.0 + 1;
                     last_move_moves_two_spaces = self.last_move.old_pos.0 == self.last_move.new_pos.0 - 2;
@@ -98,7 +181,6 @@ impl Board {
                 let last_move_only_forward = self.last_move.old_pos.1 == self.last_move.new_pos.1;
                 let last_move_allows_en_passant = last_move_is_pawn && last_move_only_forward &&
                   last_move_moves_two_spaces;
-                println!("en passant possible: {}\ntaking with en passant: {}", last_move_allows_en_passant, is_taking_with_en_passant);
 
                 if first_move && !is_taking_piece {
                     let old_row: usize = m.old_pos.0 as usize;
@@ -106,7 +188,7 @@ impl Board {
                     let moving_two_spaces; 
                     let spaces_are_empty;
 
-                    if pawn_is_white {
+                    if pawn_white {
                         moving_two_spaces = m.old_pos.0 == m.new_pos.0 + 2 && m.old_pos.1 == m.new_pos.1;
                         spaces_are_empty = self.board[old_row - 1][old_col] == Piece::Empty
                           && self.board[old_row - 2][old_col] == Piece::Empty;
@@ -144,38 +226,41 @@ impl Board {
                     if new_row < 0 || new_row > 7 || new_col < 0 || new_col > 7 {
                         continue;
                     }
+
                     // check that the new position is not occupied by piece of the same color
-                    match self.board[new_row as usize][new_col as usize] {
-                        Piece::Empty => return true,
-                        Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
-                        Piece::King   {is_white} | Piece::Queen  {is_white} |
-                        Piece::Bishop {is_white} | Piece::Knight {is_white} => {
-                            if is_white != knight_white { return true; }
-                        }
-                    };
+                    let are_different_colors = call_on_empty_status(
+                      &self.board[new_row as usize][new_col as usize],
+                      || -> bool { true },
+                      |is_white: bool| -> bool { knight_white != is_white }
+                    );
+                    if are_different_colors { return true; }
                 }
                 false
             },
 
-            Piece::Bishop{is_white} => {
+            Piece::Bishop{is_white: bishop_white} => check_bishop(bishop_white),
+            Piece::Rook{is_white: rook_white} => check_rook(rook_white),
+            Piece::Queen{is_white: queen_white} => check_bishop(queen_white) || check_rook(queen_white),
+
+            Piece::King{is_white: king_white} => {
                 false
-            }
-            _ => false
+            },
         }
     }
 
     pub fn make_move(&mut self, m: &mut Move) -> bool {
+        println!("{:?}", m);
         if self.is_valid_move(m) {
             self.board[m.old_pos.0 as usize][m.old_pos.1 as usize] = Piece::Empty;
-            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
             self.last_move = *m;
+            self.turn = !self.turn;
             match m.taken_piece {
                 Some(p) => {
                     self.board[m.taken_pos.0 as usize][m.taken_pos.1 as usize] = Piece::Empty;
                     match p {
-                        Piece::Pawn   {is_white, ..} | Piece::Rook   {is_white, ..} |
-                        Piece::King   {is_white, ..} | Piece::Queen  {is_white, ..} |
-                        Piece::Bishop {is_white, ..} | Piece::Knight {is_white, ..} => {
+                        Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
+                        Piece::King   {is_white} | Piece::Queen  {is_white} |
+                        Piece::Bishop {is_white} | Piece::Knight {is_white} => {
                             if is_white {
                                 self.black_pieces.push(p);
                             } else {
@@ -187,7 +272,7 @@ impl Board {
                 },
                 None => {}
             };
-            self.turn = !self.turn;
+            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
 
             // Determine if pawn promotion should occur
             match m.moving_piece {
@@ -367,6 +452,17 @@ impl fmt::Display for Move {
         s.push(index_to_letter(self.new_pos.1));
         s.push_str(&(8 - self.new_pos.0).to_string()[..]);
         write!(f, "{}", s)
+    }
+}
+
+fn call_on_empty_status<T: Fn() -> bool, U: Fn(bool) -> bool>
+(piece: &Piece, on_empty: T, on_nonempty: U) -> bool {
+    match piece {
+        Piece::Empty => { on_empty() },
+        Piece::Pawn   {is_white, ..} | Piece::Rook   {is_white, ..} |
+        Piece::King   {is_white, ..} | Piece::Queen  {is_white, ..} |
+        Piece::Bishop {is_white, ..} | Piece::Knight {is_white, ..} =>
+        { on_nonempty(*is_white) }
     }
 }
 
