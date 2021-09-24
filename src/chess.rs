@@ -27,10 +27,12 @@ pub struct Board {
     turn: bool,
     last_move: Move,
     // These are the pieces taken by that color, not the ones that that color has on the board.
-    // That is, white_pieces contains the black pieces taken by white, and vice versa for
-    // black_pieces.
-    white_pieces: Vec<Piece>,
-    black_pieces: Vec<Piece>
+    // That is, taken_by_white contains the black pieces taken by white, and vice versa for
+    // taken_by_black.
+    taken_by_white: Vec<Piece>,
+    taken_by_black: Vec<Piece>,
+    white_king: (u8, u8),
+    black_king: (u8, u8)
 }
 
 impl Board {
@@ -40,6 +42,12 @@ impl Board {
       } else {
         "Black"
       }
+    }
+
+    // First bool is whether we are in check or not, the other signifies the color in check.
+    fn is_in_check(&self) -> (bool, bool) {
+
+        false
     }
 
     // We assume that the move is valid in the sense that both m.old_pos and m.new_pos are actual
@@ -53,8 +61,8 @@ impl Board {
             // final position. Then the move is valid if and only if |x_f - x_i| = |y_f - y_i|.
             // This fact embodies the idea of only moving along the diagonals on the board.
             // We assume the board is empty in the above theorem.
-            let delta_row: i8 = (m.new_pos.0 as i8 - m.old_pos.0 as i8).abs();
-            let delta_col: i8 = (m.new_pos.1 as i8 - m.old_pos.1 as i8).abs();
+            let delta_row = (m.new_pos.0 - m.old_pos.0).abs();
+            let delta_col = (m.new_pos.1 - m.old_pos.1).abs();
             if delta_row != delta_col { return false; }
 
             let dr: i8 = if m.new_pos.0 > m.old_pos.0 { 1 } else { -1 };
@@ -86,8 +94,8 @@ impl Board {
             // |y_f - y_i| is zero, and the other is nonzero. This fact embodies the idea of
             // only moving along the rows and columns on the board. We assume the board is
             // empty in the above theorem.
-            let delta_row: i8 = (m.new_pos.0 as i8 - m.old_pos.0 as i8).abs();
-            let delta_col: i8 = (m.new_pos.1 as i8 - m.old_pos.1 as i8).abs();
+            let delta_row = (m.new_pos.0 - m.old_pos.0).abs();
+            let delta_col: i8 = (m.new_pos.1 - m.old_pos.1).abs();
             if !(delta_row == 0 && delta_col != 0 || delta_row != 0 && delta_col == 0) {
                 return false;
             }
@@ -243,7 +251,15 @@ impl Board {
             Piece::Queen{is_white: queen_white} => check_bishop(queen_white) || check_rook(queen_white),
 
             Piece::King{is_white: king_white} => {
-                false
+                let delta_row = m.new_pos.0 - m.old_pos.0;
+                let delta_col = m.new_pos.1 - m.old_pos.1;
+                if delta_row.abs() > 1 || delta_col.abs() > 1 { false }
+                else {
+                    call_on_empty_status(
+                      &self.board[m.new_pos.0 as usize][m.new_pos.1 as usize],
+                      || -> bool { true },
+                      |is_white: bool| -> bool { king_white != is_white })
+                }
             },
         }
     }
@@ -262,9 +278,9 @@ impl Board {
                         Piece::King   {is_white} | Piece::Queen  {is_white} |
                         Piece::Bishop {is_white} | Piece::Knight {is_white} => {
                             if is_white {
-                                self.black_pieces.push(p);
+                                self.taken_by_black.push(p);
                             } else {
-                                self.white_pieces.push(p);
+                                self.taken_by_white.push(p);
                             }
                         },
                         _ => {}
@@ -336,7 +352,7 @@ impl Board {
         let f = |acc: u8, piece: &Piece| {
             acc + piece_value(piece)
         };
-        (self.white_pieces.iter().fold(0, f), self.black_pieces.iter().fold(0, f))
+        (self.taken_by_white.iter().fold(0, f), self.taken_by_black.iter().fold(0, f))
     }
 }
 
@@ -379,8 +395,8 @@ impl Default for Board {
                 new_pos: (0,0),
                 taken_pos: (0,0),
             },
-            white_pieces: Vec::new(),
-            black_pieces: Vec::new(),
+            taken_by_white: Vec::new(),
+            taken_by_black: Vec::new(),
             turn: true
         }
     }
