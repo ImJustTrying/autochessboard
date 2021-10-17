@@ -70,7 +70,7 @@ fn parse_move(s: String, b: &Board) -> Option<Move> {
 fn main() {
     let mut board: Board = Default::default();
 
-    loop {
+    while !board.game_over {
         println!("{}", board);
         print!("({}'s turn) Enter move > ", board.get_player_turn_str());
         io::stdout().flush().expect("IO error during flush");
@@ -94,4 +94,10 @@ fn main() {
             Err(e) => { println!("Error: {}", e) }
         }
     }
+    let winner: &str = match board.get_player_turn_str() {
+        "White" => "Black",
+        "Black" => "White",
+        _ => ""
+    };
+    println!("{} wins!", winner);
 }

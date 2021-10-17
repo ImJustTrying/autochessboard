@@ -22,7 +22,10 @@ pub struct Move {
 }
 
 pub struct Board {
+    // Maybe make these private and give access through getters?
     pub board: [[Piece; 8]; 8],
+    pub game_over: bool,
+
     // turn = true -> whites turn, otherwise blacks turn
     turn: bool,
     last_move: Move,
@@ -32,22 +35,21 @@ pub struct Board {
     taken_by_white: Vec<Piece>,
     taken_by_black: Vec<Piece>,
     white_king: (u8, u8),
-    black_king: (u8, u8)
+    black_king: (u8, u8),
 }
 
 impl Board {
     pub fn get_player_turn_str(&self) -> &str {
-      if self.turn {
-        "White"
-      } else {
-        "Black"
-      }
+        if self.turn {
+            "White"
+        } else {
+            "Black"
+        }
     }
 
     // First bool is whether we are in check or not, the other signifies the color in check.
     fn is_in_check(&self) -> (bool, bool) {
-
-        false
+        (false, true)
     }
 
     // We assume that the move is valid in the sense that both m.old_pos and m.new_pos are actual
@@ -144,7 +146,7 @@ impl Board {
             Piece::Empty => false,
             Piece::Pawn{is_white: pawn_white} => {
                 if pawn_white != self.turn {
-                  return false;
+                    return false;
                 }
                 let is_taking_different_color: bool;
                 let is_taking_piece: bool = match m.taken_piece {
@@ -209,8 +211,8 @@ impl Board {
                 } else if last_move_allows_en_passant && is_taking_with_en_passant {
                     let valid_move = moving_left || moving_right;
                     if valid_move {
-                      m.taken_piece = Some(self.last_move.moving_piece);
-                      m.taken_pos = self.last_move.new_pos;
+                        m.taken_piece = Some(self.last_move.moving_piece);
+                        m.taken_pos = self.last_move.new_pos;
                     }
                     valid_move
                 } else if is_taking_piece {
@@ -222,7 +224,7 @@ impl Board {
 
             Piece::Knight{is_white: knight_white} => {
                 if knight_white != self.turn {
-                  return false;
+                    return false;
                 }
                 // These are the differences (delta x, delta y) between every possible position the
                 // knight can move to and its current position.
@@ -258,14 +260,14 @@ impl Board {
                     call_on_empty_status(
                       &self.board[m.new_pos.0 as usize][m.new_pos.1 as usize],
                       || -> bool { true },
-                      |is_white: bool| -> bool { king_white != is_white })
+                      |is_white: bool| -> bool { king_white != is_white }
+                    )
                 }
             },
         }
     }
 
     pub fn make_move(&mut self, m: &mut Move) -> bool {
-        println!("{:?}", m);
         if self.is_valid_move(m) {
             self.board[m.old_pos.0 as usize][m.old_pos.1 as usize] = Piece::Empty;
             self.last_move = *m;
@@ -275,13 +277,16 @@ impl Board {
                     self.board[m.taken_pos.0 as usize][m.taken_pos.1 as usize] = Piece::Empty;
                     match p {
                         Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
-                        Piece::King   {is_white} | Piece::Queen  {is_white} |
-                        Piece::Bishop {is_white} | Piece::Knight {is_white} => {
+                        Piece::Queen  {is_white} | Piece::Bishop {is_white} |
+                        Piece::Knight {is_white} => {
                             if is_white {
                                 self.taken_by_black.push(p);
                             } else {
                                 self.taken_by_white.push(p);
                             }
+                        },
+                        Piece::King {is_white} => {
+                            self.game_over = true;
                         },
                         _ => {}
                     };
@@ -292,7 +297,7 @@ impl Board {
 
             // Determine if pawn promotion should occur
             match m.moving_piece {
-                Piece::Pawn{is_white, ..} => {
+                Piece::Pawn{is_white} => {
                     // if the pawn gets to the opposite side of the board, promote
                     if (is_white && m.new_pos.0 == 0) || (!is_white && m.new_pos.0 == 7) {
                         loop {
@@ -338,6 +343,16 @@ impl Board {
                             }
                         }
                     }
+                },
+
+                Piece::King{is_white} => {
+                    if is_white {
+                        self.white_king = (m.new_pos.0 as u8, m.new_pos.1 as u8);
+                    } else {
+                        self.black_king = (m.new_pos.0 as u8, m.new_pos.1 as u8);
+                    }
+                    println!("white: ({}, {}), black: ({}, {})", self.white_king.0, self.white_king.1,
+                    self.black_king.0, self.black_king.1);
                 },
                 _ => {}
             };
@@ -397,7 +412,10 @@ impl Default for Board {
             },
             taken_by_white: Vec::new(),
             taken_by_black: Vec::new(),
-            turn: true
+            turn: true,
+            white_king: (7, 4),
+            black_king: (0, 4),
+            game_over: false
         }
     }
 }
