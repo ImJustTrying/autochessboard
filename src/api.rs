@@ -1,58 +1,71 @@
-//extern crate serde;
+use serde_json::{Value, from_str, from_reader, Deserializer};
+use std::io::{stdin, BufReader};
 
-use reqwest::{header, blocking};
-//use std::collections::HashMap;
-use serde::Deserialize;
-
-const PAT: &str = "Bearer lip_T2E2rY0sd498e8DW559z";
-
+// Reference: https://lichess.org/api
 #[derive(Deserialize, Debug)]
-struct Email {
-    email: String
+struct Variant {
+    key: String,
+    name: String,
+    short: String
 }
 
 #[derive(Deserialize, Debug)]
-struct Event {
-
+struct Status {
+    id: u16,
+    name: String
 }
 
-fn generate_non_data_sending_client() -> core::result::Result<blocking::Client, Box<dyn std::error::Error>> {
-    let mut headers = header::HeaderMap::new();
-    headers.insert(header::AUTHORIZATION, header::HeaderValue::from_static(PAT));
-    let client = blocking::Client::builder().default_headers(headers).build()?;
-    Ok(client)
+#[derive(Deserialize, Debug)]
+struct StreamStart {
+    id: String,
+    rated: bool,
+    variant: Variant,
+    speed: String,
+    perf: String,
+    createdAt: u64,
+    lastMoveAt: u64,
+    status: String,
+    clock: Clock,
+    initialFen: String,
+    turns: u16,
+    startedAtTurn: u16,
+    source: String,
+    //type: String,
+    state: State
 }
 
-fn generate_data_sending_client() -> core::result::Result<blocking::Client, Box<dyn std::error::Error>> {
-    let mut headers = header::HeaderMap::new();
-    headers.insert(header::AUTHORIZATION, header::HeaderValue::from_static(PAT));
-    headers.insert(header::CONTENT_TYPE, header::HeaderValue::from_static("application/x-www-form-urlencoded"));
-
-    let client = blocking::Client::builder().default_headers(headers).build()?;
-    Ok(client)
+#[derive(Deserialize, Debug)]
+struct GameState {
+    //type: String,
+    moves: String,
+    wtime: u64,
+    btime: u64,
+    winc: u8,
+    binc: u8,
+    status: String
 }
 
-
-
-pub fn email_request() -> core::result::Result<(), Box<dyn std::error::Error>> {
-    let client = generate_non_data_sending_client()?;
-    let resp: Email = client.get("https://lichess.org/api/account/email").send()?.json()?;
-    println!("{:#?}", resp);
-    Ok(())
+#[derive(Deserialize, Debug)]
+struct ChallengeResponse {
+    id: String,
+    speed: String,
+    perf: String,
+    rated: bool,
+    fen: String,
+    player: String,
+    turns: u16,
+    startedAtTurn: u16,
+    source: String,
+    createdAt: u64,
+    variant: Variant,
+    status: Status
 }
 
-pub fn ai_challenge_request() -> core::result::Result<(), Box<dyn std::error::Error>> {
-    let client = generate_data_sending_client()?;
-    let resp = client.post("https://lichess.org/api/challenge/ai")
-    .body("level=1&days=1")
-    .send()?;
-    println!("{:#?}", resp);
-    Ok(())
-}
-
-pub fn get_events() -> core::result::Result<(), Box<dyn std::error::Error>> {
-    let client = generate_non_data_sending_client()?;
-    let resp = client.get("https://lichess.org/api/stream/event").send()?.()?;
-    println!("{:#?}", resp);
-    Ok(())
+fn main() {
+    loop {
+        let mut buf = String::new();
+        let input_str = stdin().read_line(&mut buf).expect("Error reading line");
+        let json_stream: Value = from_str(&buf).expect("JSON syntax error");
+        println!("{}", json_stream);
+    }
 }

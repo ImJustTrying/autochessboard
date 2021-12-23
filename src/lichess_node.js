@@ -1,37 +1,34 @@
-import fetch from 'node-fetch';
-const { Writable } = require("stream");
+#!/usr/bin/env node
 
+import fetch from "node-fetch"
 
 // Credit: https://gist.github.com/ornicar/a097406810939cf7be1df8ea30e94f3e
+/* FOR NODEJS
+Utility function to read a ND-JSON HTTP stream.
+`processLine` is a function taking a JSON object. It will be called with each element of the stream.
+`response` is the result of a `fetch` request.
+See usage example in the next file.
+*/
 const readStream = processLine => response => {
-  const stream = response.body;
   const matcher = /\r?\n/;
   const decoder = new TextDecoder();
-  const writable = new Writable();
   let buf = '';
+  return new Promise((resolve, fail) => {
+    response.body.on('data', v => {
+      const chunk = decoder.decode(v, { stream: true });
+      buf += chunk;
 
-  /*
-  const loop = () =>
-    // .read() will return a promise with the raw data (i.e. in bytes) of the stream data
-    stream.read().then(({ done, value }) => {
-      if (done) {
-        if (buf.length > 0) processLine(JSON.parse(buf));
-      } else {
-        const chunk = decoder.decode(value, {
-          stream: true
-        });
-        buf += chunk;
-
-        const parts = buf.split(matcher);
-        buf = parts.pop();
-        for (const i of parts.filter(p => p)) processLine(JSON.parse(i));
-        return loop();
-      }
+      const parts = buf.split(matcher);
+      buf = parts.pop();
+      for (const i of parts.filter(p => p)) processLine(JSON.parse(i));
     });
-
-  return loop();
-  */
-}
+    response.body.on('end', () => {
+      if (buf.length > 0) processLine(JSON.parse(buf));
+      resolve();
+    });
+    response.body.on('error', fail);
+  });
+};
 
 const PAT = "lip_T2E2rY0sd498e8DW559z";
 let game_id = "";
@@ -59,7 +56,7 @@ async function challenge_request() {
     .then((res) => res.json()
     .then((json) => {
         game_id = json.id;
-        console.debug(json);
+        console.debug(JSON.stringify(json));
     }));
 
     await move_request();
@@ -73,15 +70,11 @@ async function move_request() {
         }
     })
     .then((res) => {
-        console.debug(`${res.status}: ${res.statusText}`);
-        console.debug(`${res.body}`);
-        readStream((string) => { console.debug(string); })(res);
+        readStream((line) => { console.debug(JSON.stringify(line)); })(res);
     }).catch((e) => {
         console.debug("got error");
         console.debug(e);
     });
-        
-    console.debug("returning");
 }
 
 event_request();
