@@ -1,4 +1,5 @@
 mod chess;
+mod lichess_api;
 use chess::*;
 
 use std::io::{self, Write};
@@ -67,7 +68,7 @@ fn parse_move(s: String, b: &Board) -> Option<Move> {
     Some(m)
 }
 
-fn main() {
+fn run_game() {
     let mut board: Board = Default::default();
 
     while !board.game_over {
@@ -100,4 +101,10 @@ fn main() {
         _ => ""
     };
     println!("{} wins!", winner);
+}
+
+fn main() {
+    // lichess_api::email_request();
+    // lichess_api::ai_challenge_request();
+    lichess_api::get_events();
 }

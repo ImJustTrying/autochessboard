@@ -49,6 +49,8 @@ impl Board {
 
     // First bool is whether we are in check or not, the other signifies the color in check.
     fn is_in_check(&self) -> (bool, bool) {
+        // Check that the king is not infront of a pawn
+        
         (false, true)
     }
 
