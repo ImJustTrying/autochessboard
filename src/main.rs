@@ -1,8 +1,11 @@
 mod chess;
-mod lichess_api;
+mod lichess;
 use chess::*;
-
-use std::io::{self, Write};
+use lichess::*;
+use std::os::unix::net::UnixStream;
+use std::io::{self, Write, Read};
+use std::str::from_utf8;
+use serde::Deserialize;
 
 fn parse_move(s: String, b: &Board) -> Option<Move> {
     let split = s.split(' ');
@@ -103,8 +106,35 @@ fn run_game() {
     println!("{} wins!", winner);
 }
 
-fn main() {
-    // lichess_api::email_request();
-    // lichess_api::ai_challenge_request();
-    lichess_api::get_events();
+
+fn main() -> io::Result<()> {
+    print!("> ");
+    io::stdout().flush().expect("I/O error during flush");
+    // We handle I/O here, both with stdin and the socket
+    let mut stream = UnixStream::connect("/tmp/chess.sock")?;
+    let mut input = String::new();
+    let n = io::stdin().read_line(&mut input)?;
+    // remove the newline character at the end of the string
+    let slice = &input[..n-1];
+    let bytes_written = stream.write(&slice.as_bytes())?;
+    let mut deserializer = serde_json::Deserializer::from_reader(stream);
+    let response = ChallengeResponse::deserialize(&mut deserializer).unwrap();
+    println!("{:#?}", response);
+    Ok(())
+}
+
+fn game() -> io::Result<()> {
+    // Here we should simiulate the I/O handling of a user playing an actual game.
+    // We should get the game state stream first, then update the internal game state,
+    // then prompt the user for moves.
+    let mut stream = UnixStream::connect("/tmp/chess.sock")?;
+    let mut input = String::new();
+    let n = io::stdin().read_line(&mut input)?;
+    // remove the newline character at the end of the string
+    let slice = &input[..n-1];
+    let bytes_written = stream.write(&slice.as_bytes())?;
+    let mut deserializer = serde_json::Deserializer::from_reader(stream);
+    let response = ChallengeResponse::deserialize(&mut deserializer).unwrap();
+    println!("{:#?}", response);
+    Ok(())
 }

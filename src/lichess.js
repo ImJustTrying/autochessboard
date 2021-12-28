@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import fetch from "node-fetch"
+import fetch from "node-fetch";
+import net from "net";
 
 // Credit: https://gist.github.com/ornicar/a097406810939cf7be1df8ea30e94f3e
 /* FOR NODEJS
@@ -44,7 +45,7 @@ async function event_request() {
     .catch((e) => {console.debug(e);});
 }
 
-async function challenge_request() {
+async function challenge_request(connection) {
     const response = await fetch("https://lichess.org/api/challenge/ai", {
         method: "POST",
         headers: {
@@ -56,10 +57,12 @@ async function challenge_request() {
     .then((res) => res.json()
     .then((json) => {
         game_id = json.id;
-        console.debug(JSON.stringify(json));
+        if (!connection.write(JSON.stringify(json))) {
+            console.debug("after challenge write failed");
+        }
     }));
 
-    await move_request();
+    //await move_request();
 }
 
 async function move_request() {
@@ -77,5 +80,34 @@ async function move_request() {
     });
 }
 
-event_request();
-challenge_request();
+async function share_data(connection) {
+    connection.setEncoding("utf8")
+    .on("data", (str) => {
+        console.debug(str);
+        switch (str) {
+            case "challenge":
+                challenge_request(connection);
+                break;
+            case "terminate":
+                server.close(() => { console.debug("client sent terminate signal"); });
+                break;
+            default:
+               if (!connection.write("Unrecognized command")) {
+                  console.debug("default response write failed");
+               }
+               break;
+        }
+    })
+    .on("error", (err) => {
+        console.debug(err);
+        server.close(() => { console.debug("shutting down"); });
+    })
+    .on("end", () => {
+        console.debug("client disconnected");
+        server.close(() => { console.debug("server shutting down"); });
+    });
+}
+
+const server = net.createServer(share_data).listen("/tmp/chess.sock", () => {
+    console.debug("server bound");
+});

@@ -1,6 +1,6 @@
-use serde_json::{Value, from_str, from_reader, Deserializer};
-use std::io::{stdin, BufReader};
+use serde::Deserialize;
 
+/*
 // Reference: https://lichess.org/api
 #[derive(Deserialize, Debug)]
 struct Variant {
@@ -44,9 +44,10 @@ struct GameState {
     binc: u8,
     status: String
 }
+*/
 
 #[derive(Deserialize, Debug)]
-struct ChallengeResponse {
+pub struct ChallengeResponse {
     id: String,
     speed: String,
     perf: String,
@@ -61,11 +62,15 @@ struct ChallengeResponse {
     status: Status
 }
 
-fn main() {
-    loop {
-        let mut buf = String::new();
-        let input_str = stdin().read_line(&mut buf).expect("Error reading line");
-        let json_stream: Value = from_str(&buf).expect("JSON syntax error");
-        println!("{}", json_stream);
-    }
+#[derive(Deserialize, Debug)]
+struct Variant {
+    key: String,
+    name: String,
+    short: String
+}
+
+#[derive(Deserialize, Debug)]
+struct Status {
+    id: u16,
+    name: String
 }
