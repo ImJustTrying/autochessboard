@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import fetch from "node-fetch";
 import net from "net";
+import rosnodejs from "rosnodejs";
+import fetch from "node-fetch";
 
 // Credit: https://gist.github.com/ornicar/a097406810939cf7be1df8ea30e94f3e
 /* FOR NODEJS
@@ -108,6 +109,12 @@ async function share_data(connection) {
     });
 }
 
+/*
 const server = net.createServer(share_data).listen("/tmp/chess.sock", () => {
     console.debug("server bound");
+});
+*/
+
+rosnodejs.initNode("/my_node").then(() => {
+    console.debug("In callback");
 });

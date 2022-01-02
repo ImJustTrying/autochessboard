@@ -1,4 +1,6 @@
-/target
 Cargo.lock
-/src/node_modules
-/src/package-lock.json
+src/autochessboard/target/
+src/autochessboard/src/node_modules/
+src/autochessboard/src/package-lock.json
+build/
+devel/

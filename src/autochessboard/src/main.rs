@@ -6,7 +6,9 @@ use std::os::unix::net::UnixStream;
 use std::io::{self, Write, Read};
 use std::str::from_utf8;
 use serde::Deserialize;
+use rosrust;
 
+/*
 fn parse_move(s: String, b: &Board) -> Option<Move> {
     let split = s.split(' ');
     let mut m: Move = Move {
@@ -105,10 +107,10 @@ fn run_game() {
     };
     println!("{} wins!", winner);
 }
-
+*/
 
 fn main() -> io::Result<()> {
-    print!("> ");
+    /*print!("> ");
     io::stdout().flush().expect("I/O error during flush");
     // We handle I/O here, both with stdin and the socket
     let mut stream = UnixStream::connect("/tmp/chess.sock")?;
@@ -119,7 +121,10 @@ fn main() -> io::Result<()> {
     let bytes_written = stream.write(&slice.as_bytes())?;
     let mut deserializer = serde_json::Deserializer::from_reader(stream);
     let response = ChallengeResponse::deserialize(&mut deserializer).unwrap();
-    println!("{:#?}", response);
+    println!("{:#?}", response);*/
+
+    rosrust::init("rust_node");
+    rosrust::spin();
     Ok(())
 }
 
