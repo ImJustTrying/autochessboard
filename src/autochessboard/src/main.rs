@@ -1,12 +1,14 @@
 mod chess;
-mod lichess;
 use chess::*;
-use lichess::*;
-use std::os::unix::net::UnixStream;
-use std::io::{self, Write, Read};
-use std::str::from_utf8;
-use serde::Deserialize;
-use rosrust;
+use rosrust::{client, subscribe};
+use rosrust_msg::{lichess_api};
+use std::collections::HashMap;
+use repl_rs::{Command, Parameter, Result, Value, Repl, Convert};
+
+struct Context {
+    board: Board,
+    game_ongoing: bool
+}
 
 /*
 fn parse_move(s: String, b: &Board) -> Option<Move> {
@@ -109,37 +111,59 @@ fn run_game() {
 }
 */
 
-fn main() -> io::Result<()> {
-    /*print!("> ");
-    io::stdout().flush().expect("I/O error during flush");
-    // We handle I/O here, both with stdin and the socket
-    let mut stream = UnixStream::connect("/tmp/chess.sock")?;
-    let mut input = String::new();
-    let n = io::stdin().read_line(&mut input)?;
-    // remove the newline character at the end of the string
-    let slice = &input[..n-1];
-    let bytes_written = stream.write(&slice.as_bytes())?;
-    let mut deserializer = serde_json::Deserializer::from_reader(stream);
-    let response = ChallengeResponse::deserialize(&mut deserializer).unwrap();
-    println!("{:#?}", response);*/
+fn challenge(args: HashMap<String, Value>, context: &mut Context) -> Result<Option<String>> {
+    let mut result = None;
+    match args.get("player") {
+        Some(p) => {
+            let s: String = p.convert().unwrap();
+            if s == "AI" || s == "ai" {
+                let challenge_client = client::<lichess_api::ChallengeAI>("/challenge_ai_srv").unwrap();
+                let challenge_response = challenge_client.req(
+                    &rosrust_msg::lichess_api::ChallengeAIReq { level: 1 }
+                ).unwrap().unwrap();
+                rosrust::ros_debug!("challenge response: {:#?}", challenge_response);
 
-    rosrust::init("rust_node");
-    rosrust::spin();
-    Ok(())
+                let move_client = client::<lichess_api::StreamGameState>("/game_stream_srv").unwrap();
+                let move_response = move_client.req(
+                    &rosrust_msg::lichess_api::StreamGameStateReq { id: challenge_response.id }
+                ).unwrap().unwrap();
+                rosrust::ros_debug!("move stream response: {:#?}", move_response);
+
+                result = Some(format!("{:#?}", move_response));
+            }
+        },
+        None => {}
+    };
+    Ok(result)
 }
 
-fn game() -> io::Result<()> {
-    // Here we should simiulate the I/O handling of a user playing an actual game.
-    // We should get the game state stream first, then update the internal game state,
-    // then prompt the user for moves.
-    let mut stream = UnixStream::connect("/tmp/chess.sock")?;
-    let mut input = String::new();
-    let n = io::stdin().read_line(&mut input)?;
-    // remove the newline character at the end of the string
-    let slice = &input[..n-1];
-    let bytes_written = stream.write(&slice.as_bytes())?;
-    let mut deserializer = serde_json::Deserializer::from_reader(stream);
-    let response = ChallengeResponse::deserialize(&mut deserializer).unwrap();
-    println!("{:#?}", response);
+fn main() -> Result<()> {
+    rosrust::init("rust_node");
+    while !rosrust::is_initialized() {
+        println!("not initialized");
+        rosrust::rate(1.0).sleep();
+    }
+    let board: Board = Default::default();
+    let context: Context = Context { board: board, game_ongoing: false };
+
+    let event_sub = subscribe("/game_event_stream", 100, |v: lichess_api::GameEvent| {
+        rosrust::ros_debug!("from game event stream: {:#?}", v);
+    }).unwrap();
+    let move_sub = subscribe("/move_stream", 100, |v: lichess_api::GameState| {
+        rosrust::ros_debug!("from move stream: {:#?}", v);
+    }).unwrap();
+
+    let mut repl = Repl::new(context)
+        .with_name("Autochessboard")
+        .with_version("v0.1.0")
+        .with_description("A physical interface for online chess play")
+        .add_command(
+            Command::new("challenge", challenge)
+                .with_parameter(Parameter::new("player").set_required(true)?)?
+                .with_parameter(Parameter::new("level").set_required(false)?)?
+                .with_help("challenge a particular player or AI"),
+        );
+
+    let _ = repl.run();
     Ok(())
 }

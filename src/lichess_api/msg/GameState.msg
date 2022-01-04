@@ -1,0 +1,11 @@
+string moves
+string status
+uint64 wtime
+uint64 btime
+uint32 winc
+uint32 binc
+string winner
+bool wdraw
+bool bdraw
+bool wtakeback
+bool btakeback

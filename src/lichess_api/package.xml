@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>autochessboard</name>
+  <name>lichess_api</name>
   <version>0.0.0</version>
-  <description>The autochessboard package</description>
+  <description>The lichess_api package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -19,14 +19,13 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/autochessboard</url> -->
+  <!-- <url type="website">http://wiki.ros.org/lichess_api</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
   <!-- Authors do not have to be maintainers, but could be -->
   <!-- Example: -->
   <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
-  <author email="kvicente@fastmail.com">Kevin Vicente</author>
 
 
   <!-- The *depend tags are used to specify dependencies -->
@@ -53,9 +52,9 @@
   <build_depend>std_msgs</build_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <exec_depend>std_msgs</exec_depend>
-  <build_depend>message_generation</build_depend>
-  <exec_depend>message_generation</exec_depend>
 
+  <build_depend>message_generation</build_depend>
+  <exec_depend>message_runtime</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

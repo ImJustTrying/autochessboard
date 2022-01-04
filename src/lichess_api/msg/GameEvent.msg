@@ -1,0 +1,2 @@
+string type
+GameEventGame game

@@ -1,6 +1,6 @@
 Cargo.lock
 src/autochessboard/target/
-src/autochessboard/src/node_modules/
-src/autochessboard/src/package-lock.json
+src/lichess_api/scripts/node_modules/
+src/lichess_api/scripts/package-lock.json
 build/
 devel/
