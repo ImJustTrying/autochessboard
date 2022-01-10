@@ -1,4 +1,0 @@
-string id
-string speed
-Player white
-Player black

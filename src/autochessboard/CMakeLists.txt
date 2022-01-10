@@ -9,7 +9,6 @@ project(autochessboard)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   std_msgs
-#  lichess_api
 )
 
 ## System dependencies are found with CMake's conventions
@@ -114,7 +113,6 @@ catkin_package(
 
 add_custom_target(autochessboard
   ALL
-  COMMENT "Building rust project"
   COMMAND cargo build -p autochessboard
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/cargo/debug/autochessboard ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/autochessboard
 )

@@ -1,4 +1,6 @@
 uint8 level
+string color
 ---
+bool success
+string error
 string id
-string player

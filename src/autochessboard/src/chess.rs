@@ -34,8 +34,6 @@ pub struct Board {
     // taken_by_black.
     taken_by_white: Vec<Piece>,
     taken_by_black: Vec<Piece>,
-    white_king: (u8, u8),
-    black_king: (u8, u8),
 }
 
 impl Board {
@@ -47,321 +45,87 @@ impl Board {
         }
     }
 
-    // First bool is whether we are in check or not, the other signifies the color in check.
-    fn is_in_check(&self) -> (bool, bool) {
-        // Check that the king is not infront of a pawn
-        
-        (false, true)
-    }
-
-    // We assume that the move is valid in the sense that both m.old_pos and m.new_pos are actual
-    // positions on the board, and the moving piece is not an empty one (i.e. not Piece::Empty).
-    fn is_valid_move(&self, m: &mut Move) -> bool {
-        if m.old_pos.0 == m.new_pos.0 && m.old_pos.1 == m.new_pos.1 {
-            return false;
-        }
-        let check_bishop = |bishop_white: bool| {
-            // Let (x_i, y_i) be the initial position of the bishop, and (x_f, y_f) be the
-            // final position. Then the move is valid if and only if |x_f - x_i| = |y_f - y_i|.
-            // This fact embodies the idea of only moving along the diagonals on the board.
-            // We assume the board is empty in the above theorem.
-            let delta_row = (m.new_pos.0 - m.old_pos.0).abs();
-            let delta_col = (m.new_pos.1 - m.old_pos.1).abs();
-            if delta_row != delta_col { return false; }
-
-            let dr: i8 = if m.new_pos.0 > m.old_pos.0 { 1 } else { -1 };
-            let dc: i8 = if m.new_pos.1 > m.old_pos.1 { 1 } else { -1 };
-            let mut pos = m.old_pos;
-            loop {
-                pos.0 += dr;
-                pos.1 += dc;
-                if pos == m.new_pos {
-                    // Check that the final position is not occupied by a piece of the same
-                    // color
-                    return call_on_empty_status(
-                      &self.board[pos.0 as usize][pos.1 as usize],
-                      || -> bool { true },
-                      |is_white: bool| -> bool { bishop_white != is_white }
-                    );
-                } else if self.board[pos.0 as usize][pos.1 as usize] != Piece::Empty {
-                    return false;
-                }
-                if pos.0 > 7 || pos.0 < 0 || pos.1 > 7 || pos.1 < 0 {
-                    return false;
-                }
-            }
-        };
-
-        let check_rook = |rook_white: bool| -> bool {
-            // Let (x_i, y_i) be the initial position of the rook, and (x_f, y_f) be the
-            // final position. Then the move is valid if and only if either |x_f - x_i|, or
-            // |y_f - y_i| is zero, and the other is nonzero. This fact embodies the idea of
-            // only moving along the rows and columns on the board. We assume the board is
-            // empty in the above theorem.
-            let delta_row = (m.new_pos.0 - m.old_pos.0).abs();
-            let delta_col: i8 = (m.new_pos.1 - m.old_pos.1).abs();
-            if !(delta_row == 0 && delta_col != 0 || delta_row != 0 && delta_col == 0) {
-                return false;
-            }
-
-            let mut var_pos: i8;
-            let const_pos: i8;
-            let d: i8;
-            if delta_row == 0 {
-                const_pos = m.old_pos.0;
-                var_pos = m.old_pos.1;
-                d = if m.new_pos.1 > m.old_pos.1 { 1 } else { -1 };
-            } else {
-                const_pos = m.old_pos.1;
-                var_pos = m.old_pos.0;
-                d = if m.new_pos.0 > m.old_pos.0 { 1 } else { -1 };
-            }
-
-            loop {
-                var_pos += d;
-                if delta_row == 0 {
-                    if var_pos == m.new_pos.1 {
-                        return call_on_empty_status(
-                          &self.board[const_pos as usize][var_pos as usize],
-                          || -> bool {true},
-                          |is_white: bool| -> bool { is_white != rook_white }
-                        );
-                    } else if self.board[const_pos as usize][var_pos as usize] != Piece::Empty {
-                        return false;
-                    }
-                } else {
-                    if var_pos == m.new_pos.0 {
-                        return call_on_empty_status(
-                          &self.board[var_pos as usize][const_pos as usize],
-                          || -> bool {true},
-                          |is_white: bool| -> bool { is_white != rook_white }
-                        );
-                    } else if self.board[var_pos as usize][const_pos as usize] != Piece::Empty {
-                        return false;
-                    }
-                }
-                if var_pos < 0 || var_pos > 7 { return false; }
-            }
-        };
-
-        match m.moving_piece {
-            Piece::Empty => false,
-            Piece::Pawn{is_white: pawn_white} => {
-                if pawn_white != self.turn {
-                    return false;
-                }
-                let is_taking_different_color: bool;
-                let is_taking_piece: bool = match m.taken_piece {
-                    Some(p) => match p {
-                        Piece::Empty => { is_taking_different_color = false; false },
-                        Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
-                        Piece::King   {is_white} | Piece::Queen  {is_white} |
-                        Piece::Bishop {is_white} | Piece::Knight {is_white} => {
-                            is_taking_different_color = is_white != pawn_white;
-                            true
+    pub fn make_move(&mut self, m: &mut Move) -> bool {
+        self.board[m.old_pos.0 as usize][m.old_pos.1 as usize] = Piece::Empty;
+        self.last_move = *m;
+        self.turn = !self.turn;
+        match m.taken_piece {
+            Some(p) => {
+                self.board[m.taken_pos.0 as usize][m.taken_pos.1 as usize] = Piece::Empty;
+                match p {
+                    Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
+                    Piece::Queen  {is_white} | Piece::Bishop {is_white} |
+                    Piece::Knight {is_white} => {
+                        if is_white {
+                            self.taken_by_black.push(p);
+                        } else {
+                            self.taken_by_white.push(p);
                         }
                     },
-                    None => { is_taking_different_color = false; false }
+                    Piece::King {is_white: _} => {
+                        self.game_over = true;
+                    },
+                    _ => {}
                 };
-                let moving_forward: bool;
-                let first_move: bool;
-                let last_move_moves_two_spaces: bool;
-                let is_taking_with_en_passant: bool;
-
-                if pawn_white {
-                    first_move = m.old_pos.0 == 6;
-                    moving_forward = m.old_pos.0 == m.new_pos.0 + 1;
-                    last_move_moves_two_spaces = self.last_move.old_pos.0 == self.last_move.new_pos.0 - 2;
-                    is_taking_with_en_passant = m.new_pos == (self.last_move.old_pos.0 + 1, self.last_move.old_pos.1);
-                } else {
-                    first_move = m.old_pos.0 == 1;
-                    moving_forward = m.old_pos.0 == m.new_pos.0 - 1;
-                    last_move_moves_two_spaces = self.last_move.old_pos.0 == self.last_move.new_pos.0 + 2;
-                    is_taking_with_en_passant = m.new_pos == (self.last_move.old_pos.0 - 1, self.last_move.old_pos.1);
-                }
-
-                let only_moving_forward = moving_forward && m.old_pos.1 == m.new_pos.1;
-                let moving_left = moving_forward && m.old_pos.1 == m.new_pos.1 + 1;
-                let moving_right = moving_forward && m.old_pos.1 == m.new_pos.1 - 1;
-
-                // Check if the last move was a first move two spaces forward by an opponent pawn
-                // to validate en passant
-                let last_move_is_pawn = match self.last_move.moving_piece {
-                    Piece::Pawn{..} => true,
-                    _ => false
-                };
-                let last_move_only_forward = self.last_move.old_pos.1 == self.last_move.new_pos.1;
-                let last_move_allows_en_passant = last_move_is_pawn && last_move_only_forward &&
-                  last_move_moves_two_spaces;
-
-                if first_move && !is_taking_piece {
-                    let old_row: usize = m.old_pos.0 as usize;
-                    let old_col: usize = m.old_pos.1 as usize;
-                    let moving_two_spaces; 
-                    let spaces_are_empty;
-
-                    if pawn_white {
-                        moving_two_spaces = m.old_pos.0 == m.new_pos.0 + 2 && m.old_pos.1 == m.new_pos.1;
-                        spaces_are_empty = self.board[old_row - 1][old_col] == Piece::Empty
-                          && self.board[old_row - 2][old_col] == Piece::Empty;
-                    } else {
-                        moving_two_spaces = m.old_pos.0 == m.new_pos.0 - 2 && m.old_pos.1 == m.new_pos.1;
-                        spaces_are_empty = self.board[old_row + 1][old_col] == Piece::Empty
-                          && self.board[old_row + 2][old_col] == Piece::Empty;
-                    }
-                    only_moving_forward || moving_two_spaces && spaces_are_empty
-                } else if last_move_allows_en_passant && is_taking_with_en_passant {
-                    let valid_move = moving_left || moving_right;
-                    if valid_move {
-                        m.taken_piece = Some(self.last_move.moving_piece);
-                        m.taken_pos = self.last_move.new_pos;
-                    }
-                    valid_move
-                } else if is_taking_piece {
-                    (moving_left || moving_right) && is_taking_different_color
-                } else {
-                    only_moving_forward
-                }
             },
+            None => {}
+        };
+        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
 
-            Piece::Knight{is_white: knight_white} => {
-                if knight_white != self.turn {
-                    return false;
-                }
-                // These are the differences (delta x, delta y) between every possible position the
-                // knight can move to and its current position.
-                let possible_position_deltas = [(1,2), (1,-2), (-1,2), (-1,-2), (2,1), (2,-1),
-                  (-2,1), (-2,-1)];
-                for delta in possible_position_deltas.iter() {
-                    let new_row = m.old_pos.0 + delta.0;
-                    let new_col = m.old_pos.1 + delta.1;
-                    if new_row < 0 || new_row > 7 || new_col < 0 || new_col > 7 {
-                        continue;
-                    }
-
-                    // check that the new position is not occupied by piece of the same color
-                    let are_different_colors = call_on_empty_status(
-                      &self.board[new_row as usize][new_col as usize],
-                      || -> bool { true },
-                      |is_white: bool| -> bool { knight_white != is_white }
-                    );
-                    if are_different_colors { return true; }
-                }
-                false
-            },
-
-            Piece::Bishop{is_white: bishop_white} => check_bishop(bishop_white),
-            Piece::Rook{is_white: rook_white} => check_rook(rook_white),
-            Piece::Queen{is_white: queen_white} => check_bishop(queen_white) || check_rook(queen_white),
-
-            Piece::King{is_white: king_white} => {
-                let delta_row = m.new_pos.0 - m.old_pos.0;
-                let delta_col = m.new_pos.1 - m.old_pos.1;
-                if delta_row.abs() > 1 || delta_col.abs() > 1 { false }
-                else {
-                    call_on_empty_status(
-                      &self.board[m.new_pos.0 as usize][m.new_pos.1 as usize],
-                      || -> bool { true },
-                      |is_white: bool| -> bool { king_white != is_white }
-                    )
-                }
-            },
-        }
-    }
-
-    pub fn make_move(&mut self, m: &mut Move) -> bool {
-        if self.is_valid_move(m) {
-            self.board[m.old_pos.0 as usize][m.old_pos.1 as usize] = Piece::Empty;
-            self.last_move = *m;
-            self.turn = !self.turn;
-            match m.taken_piece {
-                Some(p) => {
-                    self.board[m.taken_pos.0 as usize][m.taken_pos.1 as usize] = Piece::Empty;
-                    match p {
-                        Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
-                        Piece::Queen  {is_white} | Piece::Bishop {is_white} |
-                        Piece::Knight {is_white} => {
-                            if is_white {
-                                self.taken_by_black.push(p);
-                            } else {
-                                self.taken_by_white.push(p);
-                            }
-                        },
-                        Piece::King {is_white} => {
-                            self.game_over = true;
-                        },
-                        _ => {}
-                    };
-                },
-                None => {}
-            };
-            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
-
-            // Determine if pawn promotion should occur
-            match m.moving_piece {
-                Piece::Pawn{is_white} => {
-                    // if the pawn gets to the opposite side of the board, promote
-                    if (is_white && m.new_pos.0 == 0) || (!is_white && m.new_pos.0 == 7) {
-                        loop {
-                            println!("Which piece would you like to upgrade to? (Q/q = Queen, K/k = \
-                              Knight, B/b = Bishop, R/r = Rook");
-                            print!("Enter piece > ");
-                            io::stdout().flush().expect("IO error during flush");
-                            let mut input = String::new();
-                            match io::stdin().read_line(&mut input) {
-                                Ok(n) => {
-                                    if n != 2 {
-                                        eprintln!("Invalid input: incorrect input length");
+        // Determine if pawn promotion should occur
+        match m.moving_piece {
+            Piece::Pawn{is_white} => {
+                // if the pawn gets to the opposite side of the board, promote
+                if (is_white && m.new_pos.0 == 0) || (!is_white && m.new_pos.0 == 7) {
+                    loop {
+                        println!("Which piece would you like to upgrade to? (Q/q = Queen, K/k = \
+                          Knight, B/b = Bishop, R/r = Rook");
+                        print!("Enter piece > ");
+                        io::stdout().flush().expect("IO error during flush");
+                        let mut input = String::new();
+                        match io::stdin().read_line(&mut input) {
+                            Ok(n) => {
+                                if n != 2 {
+                                    eprintln!("Invalid input: incorrect input length");
+                                    continue;
+                                }
+                                match &input[0..1] {
+                                    "Q" | "q" => {
+                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                        Piece::Queen{is_white};
+                                        break;
+                                    }
+                                    "R" | "r" => {
+                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                        Piece::Rook{is_white};
+                                        break;
+                                    }
+                                    "B" | "b" => {
+                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                        Piece::Bishop{is_white};
+                                        break;
+                                    }
+                                    "K" | "k" => {
+                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
+                                        Piece::Knight{is_white};
+                                        break;
+                                    }
+                                    _ => {
+                                        eprintln!("Invalid input: invalid value supplied");
                                         continue;
                                     }
-                                    match &input[0..1] {
-                                        "Q" | "q" => {
-                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                            Piece::Queen{is_white};
-                                            break;
-                                        }
-                                        "R" | "r" => {
-                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                            Piece::Rook{is_white};
-                                            break;
-                                        }
-                                        "B" | "b" => {
-                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                            Piece::Bishop{is_white};
-                                            break;
-                                        }
-                                        "K" | "k" => {
-                                            self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                            Piece::Knight{is_white};
-                                            break;
-                                        }
-                                        _ => {
-                                            eprintln!("Invalid input: invalid value supplied");
-                                            continue;
-                                        }
-                                    }
-                                },
-                                Err(e) => { println!("Error: {}", e) }
-                            }
+                                }
+                            },
+                            Err(e) => { println!("Error: {}", e) }
                         }
                     }
-                },
+                }
+            },
 
-                Piece::King{is_white} => {
-                    if is_white {
-                        self.white_king = (m.new_pos.0 as u8, m.new_pos.1 as u8);
-                    } else {
-                        self.black_king = (m.new_pos.0 as u8, m.new_pos.1 as u8);
-                    }
-                    println!("white: ({}, {}), black: ({}, {})", self.white_king.0, self.white_king.1,
-                    self.black_king.0, self.black_king.1);
-                },
-                _ => {}
-            };
-            true
-        } else {
-            false
-        }
+            Piece::King{is_white: _} => {},
+            _ => {}
+        };
+        true
     }
 
     // Returns (white score, black score)
@@ -415,8 +179,6 @@ impl Default for Board {
             taken_by_white: Vec::new(),
             taken_by_black: Vec::new(),
             turn: true,
-            white_king: (7, 4),
-            black_king: (0, 4),
             game_over: false
         }
     }

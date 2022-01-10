@@ -1,5 +1,8 @@
 string id
 ---
+bool success
+string error
 string speed
 Player white
 Player black
+GameState initial_state

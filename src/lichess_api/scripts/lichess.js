@@ -44,7 +44,6 @@ async function request_event_stream(game_event_publisher, challenge_event_publis
         }
     })
     .then(readStream((line) => {
-        rosnodejs.log.info(JSON.stringify(line, null, 4));
         if (line.type === "gameStart" || line.type === "gameFinish") {
             game_event_publisher.publish(line);
         } else if (line.type === "challenge" ||
@@ -69,7 +68,7 @@ async function request_event_stream(game_event_publisher, challenge_event_publis
             });
         }
     }, false))
-    .catch((e) => {console.err(e);});
+    .catch((e) => {console.error(e);});
 }
 
 function create_player(playerObj) {
@@ -107,21 +106,36 @@ async function request_move_stream(request, response) {
         }
     })
     .then(readStream((line) => {
-        if (line.type === "gameFull") {
+        if (line.error !== undefined) {
+            response.success = false;
+            response.error = line.error;
+            rosnodejs.log.error(`Failed to get move stream: ${json.error}`);
+        }
+        else if (line.type === "gameFull") {
             let white = create_player(line.white);
             let black = create_player(line.black);
+            response.success = true;
+            response.error = "";
             response.speed = line.speed;
             response.white = white;
             response.black = black;
-            console.log("populated");
+            const properties = [
+              {key: "winner",    def: ""},
+              {key: "wdraw",     def: false},
+              {key: "bdraw",     def: false},
+              {key: "wtakeback", def: false},
+              {key: "btakeback", def: false}
+            ];
+            response.initial_state = { ...line.state };
+            set_optional_properties(line.state, response.initial_state, properties);
+            delete response.initial_state.type;
         }
     }, true))
-    .then(() => { console.debug("game definition received"); })
     .catch((e) => {
-        console.err(e);
+        console.error(e);
     });
 
-    // This stream will only publish the appropriate 
+    // This stream will only publish the moves when they occur
     fetch(`https://lichess.org/api/board/game/stream/${request.id}`, {
         method: "GET",
         headers: {
@@ -129,24 +143,22 @@ async function request_move_stream(request, response) {
         }
     })
     .then(readStream((line) => {
-        rosnodejs.log.info(JSON.stringify(line, null, 4));
         if (line.type === "gameState") {
-          const properties = [
-            {key: "winner",    def: ""},
-            {key: "wdraw",     def: false},
-            {key: "bdraw",     def: false},
-            {key: "wtakeback", def: false},
-            {key: "btakeback", def: false}
-          ];
-          set_optional_properties(line, line, properties);
-          game_state_publisher.publish(line);
+            const properties = [
+              {key: "winner",    def: ""},
+              {key: "wdraw",     def: false},
+              {key: "bdraw",     def: false},
+              {key: "wtakeback", def: false},
+              {key: "btakeback", def: false}
+            ];
+            set_optional_properties(line, line, properties);
+            game_state_publisher.publish(line);
         }
     }, false))
     .catch((e) => {
-        console.err(e);
+        console.error(e);
     });
 
-    console.debug("returning");
     return response;
 }
 
@@ -157,18 +169,91 @@ async function challenge_ai(request, response) {
             "Content-Type": "application/x-www-form-urlencoded",
             "Authorization": `Bearer ${PAT}`
         },
-        body: `level=${request.level}`
+        body: `level=${request.level}&color=${request.color}`
     })
-    .then((res) => res.json()
+    .then((res) => res.json())
     .then((json) => {
-        rosnodejs.log.info(JSON.stringify(json, null, 4));
-        response.id = json.id;
-        response.player = json.player;
-    }))
+        if (json.error !== undefined) {
+            rosnodejs.log.error(`Failed to challenge AI: ${json.error}`);
+            response.success = false;
+            response.error = json.error;
+            response.id = "";
+        } else {
+            response.success = true;
+            response.error = "";
+            response.id = json.id;
+        }
+    })
     .catch((e) => {
-        console.err(e);
+        console.error(e);
     });
 
+    return response;
+}
+
+async function make_move(request, response) {
+    await fetch(`https://lichess.org/api/board/game/${request.id}/move/${request.move}`, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${PAT}`
+        }
+    })
+    .then((res) => res.json())
+    .then((json) => {
+        if (json.ok !== undefined) {
+            response.success = true;
+            response.error_msg = "";
+        } else {
+            rosnodejs.log.error(`Failed to make move: ${json.error}`);
+            response.success = false;
+            response.error = json.error;
+        }
+    })
+    .catch((e) => {console.error(e);});
+    return response;
+}
+
+async function abort_game(request, response) {
+     await fetch(`https://lichess.org/api/board/game/${request.id}/abort`, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${PAT}`
+        }
+    })
+    .then((res) => res.json())
+    .then((json) => {
+        if (json.ok !== undefined) {
+            response.success = true;
+            response.error_msg = "";
+        } else {
+            response.success = false;
+            response.error = json.error;
+            rosnodejs.log.error(`Failed to abort: ${json.error}`);
+        }
+    })
+    .catch((e) => {console.error(e);});
+    return response;
+}
+
+async function resign_game(request, response) {
+     await fetch(`https://lichess.org/api/board/game/${request.id}/resign`, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${PAT}`
+        }
+    })
+    .then((res) => res.json())
+    .then((json) => {
+        if (json.ok !== undefined) {
+            response.success = true;
+            response.error_msg = "";
+        } else {
+            response.success = false;
+            response.error = json.error;
+            rosnodejs.log.error(`Failed to resign: ${json.error}`);
+        }
+    })
+    .catch((e) => {console.error(e);});
     return response;
 }
 
@@ -179,6 +264,9 @@ rosnodejs.initNode("/lichess_api").then(() => {
       nh.advertise("/game_event_stream", "lichess_api/GameEvent"),
       nh.advertise("/challenge_event_stream", "lichess_api/ChallengeEvent")
     );
-    nh.advertiseService("/challenge_ai_srv", "lichess_api/ChallengeAI", challenge_ai);
-    nh.advertiseService("/game_stream_srv", "lichess_api/StreamGameState", request_move_stream);
+    nh.advertiseService("/challenge_ai", "lichess_api/ChallengeAI", challenge_ai);
+    nh.advertiseService("/stream_game", "lichess_api/StreamGameState", request_move_stream);
+    nh.advertiseService("/make_move", "lichess_api/MakeMove", make_move);
+    nh.advertiseService("/abort", "lichess_api/Abort", abort_game);
+    nh.advertiseService("/resign", "lichess_api/Resign", resign_game);
 });

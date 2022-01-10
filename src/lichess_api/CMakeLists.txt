@@ -55,7 +55,6 @@ add_message_files(
   GameEventGame.msg
   GameEvent.msg
   Player.msg
-  GameDef.msg
   GameState.msg
 )
 
@@ -64,6 +63,9 @@ add_service_files(
   FILES
   ChallengeAI.srv
   StreamGameState.srv
+  MakeMove.srv
+  Abort.srv
+  Resign.srv
 )
 
 ## Generate actions in the 'action' folder
