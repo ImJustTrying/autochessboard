@@ -143,6 +143,7 @@ async function request_move_stream(request, response) {
         }
     })
     .then(readStream((line) => {
+        rosnodejs.log.info(JSON.stringify(line, null, 4));
         if (line.type === "gameState") {
             const properties = [
               {key: "winner",    def: ""},
