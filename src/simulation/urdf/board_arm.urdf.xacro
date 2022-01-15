@@ -1,0 +1,67 @@
+<?xml version="1.1"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="board_arm">
+    <xacro:property name="link_length" value="${5*sqrt(2)/2 - cylinder_radius}"/>
+    <xacro:property name="link_width" value="0.5"/>
+    <xacro:property name="link_height" value="0.5"/>
+    <xacro:property name="cylinder_radius" value="${link_width / 2}"/>
+
+    <material name="Red">
+        <color rgba="${220/255} ${0/255} ${25/255} 0.5"/>
+    </material>
+    <material name="Black">
+        <color rgba="0.0 0.0 0.0 0.5"/>
+    </material>
+
+    <!-- link0 is the ground or base_link: unmoving -->
+    <link name="link0"/>
+
+    <link name="link1">
+        <visual name="joint">
+            <origin xyz="0 0 0"/>
+            <geometry>
+                <cylinder length="${link_height}" radius="${cylinder_radius}"/>
+            </geometry>
+            <material name="Black"/>
+        </visual>
+        <visual name="link">
+            <!-- the "link_length + 2" is there since the frame is in the center of the box -->
+            <origin xyz="${link_length / 2 + cylinder_radius} 0 0"/>
+            <geometry>
+                <box size="${link_length} ${link_width} ${link_height}"/>
+            </geometry>
+            <material name="Red"/>
+        </visual>
+    </link>
+
+    <link name="link2">
+        <visual name="joint">
+            <origin xyz="0 0 0"/>
+            <geometry>
+                <cylinder length="${link_height}" radius="${cylinder_radius}"/>
+            </geometry>
+            <material name="Black"/>
+        </visual>
+        <visual name="link">
+            <origin xyz="${link_length / 2 + cylinder_radius} 0 0"/>
+            <geometry>
+                <box size="${link_length} ${link_width} ${link_height}"/>
+            </geometry>
+            <material name="Red"/>
+        </visual>
+    </link>
+
+
+    <joint name="joint0" type="continuous">
+        <parent link="link0"/>
+        <child link="link1"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <joint name="joint1" type="continuous">
+        <parent link="link1"/>
+        <child link="link2"/>
+        <origin xyz="${link_length} 0 ${link_height}" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+</robot>

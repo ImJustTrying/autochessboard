@@ -114,8 +114,8 @@ catkin_package(
 
 add_custom_target(board_control
   ALL
-  COMMAND cargo build -p board_controller
-  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/cargo/debug/board_controller ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/board_controller
+  COMMAND cargo build -p board_control
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/cargo/debug/board_control ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/board_control
 )
 
 ## Specify additional locations of header files

@@ -1,0 +1,15 @@
+<launch>
+    <arg name="model" default="$(find simulation)/urdf/board_arm.urdf.xacro"/>
+    <arg name="rviz_config" default="$(find simulation)/rviz/config.rviz"/>
+
+    <param name="robot_description" command="xacro $(arg model)"/>
+
+    <node pkg="joint_state_publisher_gui" name="joint_state_publisher" type="joint_state_publisher_gui">
+        <rosparam param="rate">144</rosparam>
+        <rosparam param="source_list">["joint_states_interpolated"]</rosparam>
+    </node>
+    <node pkg="robot_state_publisher" name="robot_state_publisher" type="robot_state_publisher">
+        <rosparam param="publish_frequency">144</rosparam>
+    </node>
+    <node pkg="rviz" type="rviz" name="visualizer" args="--display-config $(arg rviz_config)" required="true"/>
+</launch>
