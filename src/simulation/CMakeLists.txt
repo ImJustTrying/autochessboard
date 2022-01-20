@@ -9,10 +9,12 @@ project(simulation)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   std_msgs
+  gazebo_ros
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
+find_package(gazebo REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -105,6 +107,7 @@ catkin_package(
 #  LIBRARIES simulation
 #  CATKIN_DEPENDS rosoct std_msgs
 #  DEPENDS system_lib
+    DEPENDS gazebo_ros
 )
 
 ###########
