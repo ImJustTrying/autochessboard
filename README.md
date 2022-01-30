@@ -23,3 +23,18 @@ The following is a breakdown of the various ROS packages in this workspace
   * Configuration files for the `ros-control` package are contained in this package
   * Rust code for interfacing with GPIO pins (e.g. the ones on a RaspberryPI) for sending signals to physical actuators
   * Usage: `roslaunch board_arm_control board_arm_control.launch` or (not yet implemented) `rosrun board_arm_control gpio`
+
+# dependencies
+- [ROS 1](https://ros.org/)
+  * Specifically the `ros-*-desktop-full` variant
+  * Tested on melodic & noetic
+- [Gazebo](http://gazebosim.org/)
+  * Tested on versions 9 & 11
+- [`ros-control` &  `ros-controllers`](http://wiki.ros.org/ros_control)
+  * Use `sudo apt install ros-control ros-controllers`
+- [NodeJS](https://nodejs.org/) & [`npm`](https://www.npmjs.com/)
+  * Tested on node LTS (16.13.2) & npm version 8.1.2
+- [`rosnodejs`](https://www.npmjs.com/package/rosnodejs) & [`node-fetch`](https://www.npmjs.com/package/node-fetch)
+  * Use `npm install rosnodejs node-fetch`
+- [Rust](https://rust-lang.org)
+  * Tested on rust 2018 & 2021 edition
