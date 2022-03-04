@@ -5,3 +5,4 @@ src/lichess_api/scripts/package-lock.json
 src/CMakeLists.txt
 build/
 devel/
+node_modules/

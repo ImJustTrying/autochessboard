@@ -109,7 +109,7 @@ async function request_move_stream(request, response) {
         if (line.error !== undefined) {
             response.success = false;
             response.error = line.error;
-            rosnodejs.log.error(`Failed to get move stream: ${json.error}`);
+            rosnodejs.log.error(`Failed to get move stream: ${line.error}`);
         }
         else if (line.type === "gameFull") {
             let white = create_player(line.white);

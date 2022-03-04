@@ -1,2 +1,2 @@
 [workspace]
-members = ["src/autochessboard", "src/board_arm_control", "src/simulation"]
+members = ["src/autochessboard", "src/board_arm_control", "src/simulation", "src/chess"]

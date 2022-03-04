@@ -113,7 +113,7 @@ catkin_package(
 
 add_custom_target(autochessboard
   ALL
-  COMMAND cargo build -p autochessboard
+  COMMAND cargo build -p autochessboard --target armv7-unknown-linux-gnueabihf
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/cargo/debug/autochessboard ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/autochessboard
 )
 

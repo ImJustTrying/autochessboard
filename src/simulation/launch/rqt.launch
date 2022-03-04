@@ -1,0 +1,4 @@
+<launch>
+    <arg name="rqt_config" default="$(find simulation)/config/myconfig.perspective"/>
+    <node pkg="rqt_gui" name="rqt_gui" type="rqt_gui" args="--perspective-file $(arg rqt_config)"/>
+</launch>

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::io::{self, Write};
+use std::vec::Vec;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Piece {
@@ -16,19 +17,17 @@ pub enum Piece {
 pub struct Move {
     pub moving_piece: Piece,
     pub taken_piece: Option<Piece>,
+    pub promotion: Option<Piece>,
     pub old_pos: (i8, i8),
     pub new_pos: (i8, i8),
-    pub taken_pos: (i8, i8)
+    // the only time new_pos and taken_pos are different is when en passant captures occur
+    pub taken_pos: Option<(i8, i8)>,
+    pub is_castle: bool
 }
 
 pub struct Board {
     // Maybe make these private and give access through getters?
-    pub board: [[Piece; 8]; 8],
-    pub game_over: bool,
-
-    // turn = true -> whites turn, otherwise blacks turn
-    turn: bool,
-    last_move: Move,
+    board: [[Piece; 8]; 8],
     // These are the pieces taken by that color, not the ones that that color has on the board.
     // That is, taken_by_white contains the black pieces taken by white, and vice versa for
     // taken_by_black.
@@ -36,7 +35,27 @@ pub struct Board {
     taken_by_black: Vec<Piece>,
 }
 
-impl Board {
+pub struct Game {
+    pub board: Board,
+    moves: Vec<Move>,
+    game_over: bool,
+    // turn = true -> whites turn, otherwise blacks turn
+    turn: bool,
+}
+
+
+impl Game {
+    // TODO: Create the FEN representation of the board in it's current state
+    pub fn get_fen(&self) -> String {
+        let fen = String::new();
+        for rank in self.board.board {
+            for file in rank {
+                println!("{:#?}", file);
+            }
+        }
+	fen
+    }
+
     pub fn get_player_turn_str(&self) -> &str {
         if self.turn {
             "White"
@@ -45,98 +64,24 @@ impl Board {
         }
     }
 
-    pub fn make_move(&mut self, m: &mut Move) -> bool {
-        self.board[m.old_pos.0 as usize][m.old_pos.1 as usize] = Piece::Empty;
-        self.last_move = *m;
-        self.turn = !self.turn;
-        match m.taken_piece {
-            Some(p) => {
-                self.board[m.taken_pos.0 as usize][m.taken_pos.1 as usize] = Piece::Empty;
-                match p {
-                    Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
-                    Piece::Queen  {is_white} | Piece::Bishop {is_white} |
-                    Piece::Knight {is_white} => {
-                        if is_white {
-                            self.taken_by_black.push(p);
-                        } else {
-                            self.taken_by_white.push(p);
-                        }
-                    },
-                    Piece::King {is_white: _} => {
-                        self.game_over = true;
-                    },
-                    _ => {}
-                };
-            },
-            None => {}
-        };
-        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
-
-        // Determine if pawn promotion should occur
-        match m.moving_piece {
-            Piece::Pawn{is_white} => {
-                // if the pawn gets to the opposite side of the board, promote
-                if (is_white && m.new_pos.0 == 0) || (!is_white && m.new_pos.0 == 7) {
-                    loop {
-                        println!("Which piece would you like to upgrade to? (Q/q = Queen, K/k = \
-                          Knight, B/b = Bishop, R/r = Rook");
-                        print!("Enter piece > ");
-                        io::stdout().flush().expect("IO error during flush");
-                        let mut input = String::new();
-                        match io::stdin().read_line(&mut input) {
-                            Ok(n) => {
-                                if n != 2 {
-                                    eprintln!("Invalid input: incorrect input length");
-                                    continue;
-                                }
-                                match &input[0..1] {
-                                    "Q" | "q" => {
-                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                        Piece::Queen{is_white};
-                                        break;
-                                    }
-                                    "R" | "r" => {
-                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                        Piece::Rook{is_white};
-                                        break;
-                                    }
-                                    "B" | "b" => {
-                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                        Piece::Bishop{is_white};
-                                        break;
-                                    }
-                                    "K" | "k" => {
-                                        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] =
-                                        Piece::Knight{is_white};
-                                        break;
-                                    }
-                                    _ => {
-                                        eprintln!("Invalid input: invalid value supplied");
-                                        continue;
-                                    }
-                                }
-                            },
-                            Err(e) => { println!("Error: {}", e) }
-                        }
-                    }
-                }
-            },
-
-            Piece::King{is_white: _} => {},
-            _ => {}
-        };
-        true
-    }
-
-    // Returns (white score, black score)
-    pub fn get_score(&self) -> (u8, u8) {
-        let f = |acc: u8, piece: &Piece| {
-            acc + piece_value(piece)
-        };
-        (self.taken_by_white.iter().fold(0, f), self.taken_by_black.iter().fold(0, f))
+    pub fn last_move(&self) -> Option<&Move> {
+        self.moves.last()
     }
 }
 
+impl Default for Game {
+    fn default() -> Self {
+        Game {
+            board: Default::default(),
+            moves: Vec::new(),
+            turn: true,
+            game_over: false
+        }
+    }
+}
+
+
+// --------------------- This is for the Board struct --------------------- 
 impl Default for Board {
     fn default() -> Self {
         let mut default_board = [[Piece::Empty; 8]; 8];
@@ -169,20 +114,80 @@ impl Default for Board {
 
         Board {
             board: default_board,
-            last_move: Move {
-                moving_piece: Piece::Empty,
-                taken_piece: None,
-                old_pos: (0,0),
-                new_pos: (0,0),
-                taken_pos: (0,0),
-            },
             taken_by_white: Vec::new(),
             taken_by_black: Vec::new(),
-            turn: true,
-            game_over: false
         }
     }
 }
+
+impl Board {
+    pub fn make_move(&mut self, m: &mut Move) -> bool {
+        self.board[m.old_pos.0 as usize][m.old_pos.1 as usize] = Piece::Empty;
+        match m.taken_piece {
+            Some(p) => {
+                match m.taken_pos {
+                    Some(t) => {
+                        self.board[t.0 as usize][t.1 as usize] = Piece::Empty;
+                    },
+                    None => {}
+                };
+
+                match p {
+                    Piece::Pawn   {is_white} | Piece::Rook   {is_white} |
+                    Piece::Queen  {is_white} | Piece::Bishop {is_white} |
+                    Piece::Knight {is_white} => {
+                        if is_white {
+                            self.taken_by_black.push(p);
+                        } else {
+                            self.taken_by_white.push(p);
+                        }
+                    },
+                    _ => {}
+                };
+            },
+            None => {}
+        };
+        self.board[m.new_pos.0 as usize][m.new_pos.1 as usize] = m.moving_piece;
+
+        // Determine if pawn promotion should occur
+        match m.moving_piece {
+            Piece::Pawn{is_white} => {
+                // TODO: if the pawn gets to the opposite side of the board, promote
+            },
+            _ => {}
+        };
+        true
+    }
+
+    pub fn make_moves(&mut self, moves: &mut Vec<Move>) -> u8 {
+        let mut num_moves_made: u8 = 0;
+        for m in moves.iter_mut() {
+            if self.make_move(m) {
+                num_moves_made += 1;
+            } else {
+                return num_moves_made;
+            }
+        }
+        num_moves_made
+    }
+
+    // Returns (white score, black score)
+    pub fn get_score(&self) -> (u8, u8) {
+        let f = |acc: u8, piece: &Piece| {
+            acc + piece_value(piece)
+        };
+        (self.taken_by_white.iter().fold(0, f), self.taken_by_black.iter().fold(0, f))
+    }
+
+    pub fn get_piece(&self, rank: usize, file: usize) -> Option<Piece> {
+        if rank < 8 && file < 8 {
+            Some(self.board[rank][file])
+        } else {
+            None
+        }
+    }
+}
+
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -253,6 +258,26 @@ impl fmt::Display for Move {
     }
 }
 
+// ============== PUBLIC FUNCTIONS ==============
+pub fn move_strings_to_moves(move_strings: Vec<String>) -> Vec<Move> {
+    /*
+    for (move_string in move_strings) {
+        
+    }
+    */
+    vec![]
+}
+
+pub fn same_color(p1: &Piece, p2: &Piece) -> bool {
+    let p1_is_white: bool = call_on_empty_status(p1, || {true}, |is_white| {is_white}); 
+    let p2_is_white: bool = call_on_empty_status(p2, || {true}, |is_white| {is_white});
+    p1_is_white == p2_is_white
+}
+
+
+// ============== PRIVATE FUNCTIONS ==============
+// Takes two argument functions and calls either the first or second depending on whether the
+// piece is empty or nonempty.
 fn call_on_empty_status<T: Fn() -> bool, U: Fn(bool) -> bool>
 (piece: &Piece, on_empty: T, on_nonempty: U) -> bool {
     match piece {
@@ -307,5 +332,25 @@ fn piece_to_unicode(piece: &Piece) -> char {
         Piece::Rook   {is_white, ..} => get_piece_char(is_white, WHITE_ROOK,   BLACK_ROOK),
         Piece::Queen  {is_white, ..} => get_piece_char(is_white, WHITE_QUEEN,  BLACK_QUEEN),
         Piece::King   {is_white, ..} => get_piece_char(is_white, WHITE_KING,   BLACK_KING)
+    }
+}
+
+
+// ================== TESTS ================== 
+#[cfg(test)]
+mod unit_tests {
+    use crate::{Move, Board, Piece};
+    #[test]
+    fn first_move() {
+        let mut board: Board = Default::default();
+        let mut m: Move = Move {
+            moving_piece: Piece::Pawn { is_white: true },
+            taken_piece: None,
+            promotion: None,
+            old_pos: (0, 1),
+            new_pos: (0, 3),
+            taken_pos: None
+        };
+        assert!(board.make_move(&mut m));
     }
 }
