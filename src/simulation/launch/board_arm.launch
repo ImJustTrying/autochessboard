@@ -1,6 +1,9 @@
 <launch>
-    <arg name="model" default="$(find simulation)/urdf/board_arm.urdf.xacro"/>
-    <param name="robot_description" command="$(find xacro)/xacro $(arg model)"/>
+    <arg name="model" value="$(find simulation)/urdf/board_arm.urdf.xacro"/>
+    <arg name="link_length" value="$(eval (0.25 * 5 * sqrt(2) - 0.05) / 2)"/>
+
+    <param name="link_length" type="double" value="$(arg link_length)"/>
+    <param name="robot_description" command="$(find xacro)/xacro $(arg model) link_length:=$(arg link_length)"/>
 
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
         <arg name="world_name" value="$(find simulation)/worlds/board_arm.world"/>

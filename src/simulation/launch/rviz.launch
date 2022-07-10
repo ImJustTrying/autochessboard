@@ -8,7 +8,7 @@
         <rosparam param="source_list">["joint_states_interpolated"]</rosparam>
     </node>
     <node pkg="robot_state_publisher" name="robot_state_publisher" type="robot_state_publisher">
-        <rosparam param="publish_frequency">144</rosparam>
+        <rosparam param="publish_frequency">60</rosparam>
     </node>
     <node pkg="rviz" type="rviz" name="visualizer" args="--display-config $(arg rviz_config)" required="true"/>
 </launch>

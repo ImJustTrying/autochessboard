@@ -115,6 +115,12 @@ catkin_package(
 ## Build ##
 ###########
 
+add_custom_target(board_arm_control
+  ALL
+  COMMAND cargo build -p board_arm_control
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/cargo/debug/board_arm_control ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/board_arm_control
+)
+
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
