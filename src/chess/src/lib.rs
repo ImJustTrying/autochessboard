@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, Write};
+//use std::io::{self, Write};
 use std::vec::Vec;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -151,7 +151,7 @@ impl Board {
 
         // Determine if pawn promotion should occur
         match m.moving_piece {
-            Piece::Pawn{is_white} => {
+            Piece::Pawn{is_white: _} => {
                 // TODO: if the pawn gets to the opposite side of the board, promote
             },
             _ => {}
@@ -259,7 +259,7 @@ impl fmt::Display for Move {
 }
 
 // ============== PUBLIC FUNCTIONS ==============
-pub fn move_strings_to_moves(move_strings: Vec<String>) -> Vec<Move> {
+pub fn move_strings_to_moves(_move_strings: Vec<String>) -> Vec<Move> {
     /*
     for (move_string in move_strings) {
         

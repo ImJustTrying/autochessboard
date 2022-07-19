@@ -3,12 +3,13 @@
 https://classic.gazebosim.org/tutorials?tut=ros_urdf -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="board_arm">
     <xacro:arg name="link_length" default="0.2"/>
-    <xacro:property name="tile_size" value="0.25"/>
+    <xacro:arg name="tile_size" default="0.25"/>
     <xacro:property name="link_mass" value="0.1"/>
     <xacro:property name="link_height" value="0.1"/>
     <xacro:property name="link_width" value="0.1"/>
     <xacro:property name="cylinder_radius" value="${link_width / 2}"/>
     <xacro:property name="link_length" value="$(arg link_length)"/>
+    <xacro:property name="tile_size" value="$(arg tile_size)"/>
 
     <gazebo>
         <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">

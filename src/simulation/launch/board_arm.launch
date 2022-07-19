@@ -1,8 +1,12 @@
 <launch>
+    <!-- The extra 0.0001 added to the link_length is to compensate for
+    floating point error -->
+    <arg name="link_length" value="$(eval (0.25 * 5 * sqrt(2) / 2) + 0.0001)"/>
+    <arg name="tile_size" value="0.25"/>
     <arg name="model" value="$(find simulation)/urdf/board_arm.urdf.xacro"/>
-    <arg name="link_length" value="$(eval (0.25 * 5 * sqrt(2) - 0.05) / 2)"/>
 
     <param name="link_length" type="double" value="$(arg link_length)"/>
+    <param name="tile_size" type="double" value="$(arg tile_size)"/>
     <param name="robot_description" command="$(find xacro)/xacro $(arg model) link_length:=$(arg link_length)"/>
 
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
