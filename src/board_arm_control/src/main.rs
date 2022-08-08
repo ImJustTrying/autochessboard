@@ -1,9 +1,14 @@
-use rosrust::{publish, param};
+use rosrust::{publish, param, subscribe};
 use rosrust_msg::std_msgs::Float64;
+use rosrust_msg::control_msgs::JointControllerState;
+
+use std::f64::consts::PI;
 use std::fmt;
 use std::io;
 use std::io::Write;
 use std::ops::Add;
+use std::sync::{Arc, Mutex, Condvar};
+
 
 #[derive(Debug,Copy,Clone)]
 struct Vector2 {
@@ -78,8 +83,9 @@ fn inverse_kinematics(config: Vector2) -> Vector2 {
 }
 
 
-// start & end are specified in lattice space coordinates
+// start and end are specified in lattice space coordinates
 fn find_path(start: (i8, i8), end: (i8, i8)) -> Vec<Vector2> {
+    if start.0 == end.0 && start.1 == end.1 { return vec![]; }
     let mut lattice_path = vec![start];
     let mut lattice_dist = (end.0 - start.0, end.1 - start.1);
     let mut current_pos = start;
@@ -87,17 +93,32 @@ fn find_path(start: (i8, i8), end: (i8, i8)) -> Vec<Vector2> {
         if lattice_dist.0 > 0 { 1 } else { -1 },
         if lattice_dist.1 > 0 { 1 } else { -1 }
     );
+    // Move the arm in between tiles before path finding
+    current_pos.0 += direction.0;
+    lattice_dist.0 -= direction.0;
+    lattice_path.push(current_pos);
 
-    while current_pos.0 != end.0 || current_pos.1 != end.1 {
+    while lattice_dist.0.abs() > 1 || lattice_dist.1.abs() > 1 {
         if lattice_dist.0.abs() > lattice_dist.1.abs() {
-            current_pos.0 += direction.0;
-            lattice_dist.0 -= direction.0;
+            // double the distance moved to remain inbetween tiles
+            current_pos.0 += 2 * direction.0;
+            lattice_dist.0 -= 2 * direction.0;
         } else {
-            current_pos.1 += direction.1;
-            lattice_dist.1 -= direction.1;
+            current_pos.1 += 2 * direction.1;
+            lattice_dist.1 -= 2 * direction.1;
         }
         lattice_path.push(current_pos);
     }
+
+    println!("distance: ({}, {})", lattice_dist.0, lattice_dist.1);
+    if lattice_dist.0.abs() == 1 {
+        current_pos.0 += direction.0;
+        lattice_dist.0 -= direction.0;
+    } else if lattice_dist.1.abs() == 1 {
+        current_pos.1 += direction.1;
+        lattice_dist.1 -= direction.1;
+    }
+    lattice_path.push(current_pos);
 
     lattice_path.iter().map(|pos| {
         println!("({}, {})", pos.0, pos.1);
@@ -108,20 +129,45 @@ fn find_path(start: (i8, i8), end: (i8, i8)) -> Vec<Vector2> {
 
 fn main() -> io::Result<()> {
     rosrust::init("autochessboard");
+    let dist_criteria = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    let j1_criteria = Arc::clone(&dist_criteria);
+    let j2_criteria = Arc::clone(&dist_criteria);
 
-    /*
     let _j1_sub = subscribe("/board_arm/joint1_position_controller/state", 1,
-        |s: control_msgs::JointControllerState| {
-            rosrust::ros_debug!("from joint 1 controller: {:#?}", s);
+        move |s: JointControllerState| {
+            let commanded =
+                if s.set_point < 0.0 { s.set_point + 2.0 * PI }
+                else { s.set_point };
+            let position =
+                if s.process_value < 0.0 { s.process_value + 2.0 * PI }
+                else { s.process_value };
+
+            if position - commanded < 0.1 {
+                let (lock, cvar) = &*j1_criteria;
+                let mut pending = lock.lock().unwrap();
+                (*pending).0 = true;
+                cvar.notify_one();
+            }
         }
-    ).unwrap();
+    ).expect("Failed to subscribe to joint1 position controller");
 
     let _j2_sub = subscribe("/board_arm/joint2_position_controller/state", 1,
-        |s: control_msgs::JointControllerState| {
-            rosrust::ros_debug!("from joint 2 controller: {:#?}", s);
+        move |s: JointControllerState| {
+            let commanded =
+                if s.set_point < 0.0 { s.set_point + 2.0 * PI }
+                else { s.set_point };
+            let position =
+                if s.process_value < 0.0 { s.process_value + 2.0 * PI }
+                else { s.process_value };
+
+            if position - commanded < 0.1 {
+                let (lock, cvar) = &*j2_criteria;
+                let mut pending = lock.lock().unwrap();
+                (*pending).1 = true;
+                cvar.notify_one();
+            }
         }
-    ).unwrap();
-    */
+    ).expect("Failed to subscribe to joint2 position controller");
 
     let j1_pub = publish::<Float64>
         ("/board_arm/joint1_position_controller/command", 100)
@@ -130,7 +176,6 @@ fn main() -> io::Result<()> {
         ("/board_arm/joint2_position_controller/command", 100)
         .expect("Failed to create joint2 command publisher");
 
-    let rate = rosrust::rate(1.0);
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut input = String::new();
@@ -181,6 +226,7 @@ fn main() -> io::Result<()> {
             (end1.unwrap(), end2.unwrap())
         );
 
+        let (lock, cvar) = &*dist_criteria;
         for position in path {
             println!("Position: {}", position);
             let config = inverse_kinematics(position);
@@ -190,7 +236,20 @@ fn main() -> io::Result<()> {
             j2_msg.data = config.x2;
             j1_pub.send(j1_msg).unwrap();
             j2_pub.send(j2_msg).unwrap();
-            rate.sleep();
+
+            // Wait for arm to be sufficiently close to commanded position
+            println!("Blocking!");
+            let _guard = cvar.wait_while(lock.lock().unwrap(), |pending| {
+                println!("({}, {})", (*pending).0, (*pending).1);
+                if (*pending).0 && (*pending).1 {
+                    (*pending).0 = false;
+                    (*pending).1 = false;
+                    false
+                } else {
+                    true
+                }
+            }).unwrap();
+            println!("Unblocking!");
         }
         break;
     }
