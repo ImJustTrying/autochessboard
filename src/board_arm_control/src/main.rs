@@ -1,11 +1,11 @@
-use rosrust::{publish, param, subscribe};
-use rosrust_msg::std_msgs::Float64;
+use rosrust::{sleep, Duration, publish, param, subscribe};
+use rosrust_msg::{board_arm_control, std_msgs};
 use rosrust_msg::control_msgs::JointControllerState;
 
 use std::f64::consts::PI;
 use std::fmt;
 use std::io;
-use std::io::Write;
+use std::num::ParseIntError;
 use std::ops::Add;
 use std::sync::{Arc, Mutex, Condvar};
 
@@ -70,7 +70,6 @@ fn forward_kinematics(config: Vector2) -> Vector2 {
 
 fn inverse_kinematics(config: Vector2) -> Vector2 {
     let l : f64 = param("/link_length").unwrap().get::<f64>().unwrap();
-    println!("l = {}", l);
     let dist_squared = config.x1 * config.x1 + config.x2 * config.x2;
     // derived using the law of cosines, trigonometry
     let x2 = (dist_squared / (2.0 * l * l) - 1.0).acos();
@@ -93,9 +92,16 @@ fn find_path(start: (i8, i8), end: (i8, i8)) -> Vec<Vector2> {
         if lattice_dist.0 > 0 { 1 } else { -1 },
         if lattice_dist.1 > 0 { 1 } else { -1 }
     );
+
     // Move the arm in between tiles before path finding
-    current_pos.0 += direction.0;
-    lattice_dist.0 -= direction.0;
+    if current_pos.0 % 2 == 1 {
+        current_pos.0 += direction.0;
+        lattice_dist.0 -= direction.0;
+    }
+    if current_pos.1 % 2 == 1 {
+        current_pos.1 += direction.1;
+        lattice_dist.1 -= direction.1;
+    }
     lattice_path.push(current_pos);
 
     while lattice_dist.0.abs() > 1 || lattice_dist.1.abs() > 1 {
@@ -114,7 +120,8 @@ fn find_path(start: (i8, i8), end: (i8, i8)) -> Vec<Vector2> {
     if lattice_dist.0.abs() == 1 {
         current_pos.0 += direction.0;
         lattice_dist.0 -= direction.0;
-    } else if lattice_dist.1.abs() == 1 {
+    }
+    if lattice_dist.1.abs() == 1 {
         current_pos.1 += direction.1;
         lattice_dist.1 -= direction.1;
     }
@@ -128,7 +135,43 @@ fn find_path(start: (i8, i8), end: (i8, i8)) -> Vec<Vector2> {
 
 
 fn main() -> io::Result<()> {
-    rosrust::init("autochessboard");
+    rosrust::init("board_arm_control_node");
+
+    let _service = rosrust::service::<board_arm_control::MakeMove, _>(
+        "board_arm_control/make_move",
+        move |req| {
+            let mut chars = req.move_.chars();
+            let letter_to_num = |c: char| -> i8 {
+                match c {
+                    'a' => 3,
+                    'b' => 5,
+                    'c' => 7,
+                    'd' => 9,
+                    'e' => 11,
+                    'f' => 13,
+                    'g' => 15,
+                    'h' => 17,
+                     _  => 0
+                }
+            };
+
+            let start = (
+                letter_to_num(chars.next().unwrap()),
+                chars.next().unwrap().to_digit(10).unwrap() as i8
+            );
+            let end = (
+                letter_to_num(chars.next().unwrap()),
+                chars.next().unwrap().to_digit(10).unwrap() as i8
+            );
+
+            println!("({}, {}), ({}, {})", start.0, start.1, end.0, end.1);
+            Ok(board_arm_control::MakeMoveRes {
+                success: true,
+                error: String::from("")
+            })
+        }
+    ).unwrap();
+
     let dist_criteria = Arc::new((Mutex::new((false, false)), Condvar::new()));
     let j1_criteria = Arc::clone(&dist_criteria);
     let j2_criteria = Arc::clone(&dist_criteria);
@@ -169,69 +212,65 @@ fn main() -> io::Result<()> {
         }
     ).expect("Failed to subscribe to joint2 position controller");
 
-    let j1_pub = publish::<Float64>
+    let _j1_pub = publish::<std_msgs::Float64>
         ("/board_arm/joint1_position_controller/command", 100)
         .expect("Failed to create joint1 command publisher");
-    let j2_pub = publish::<Float64>
+    let _j2_pub = publish::<std_msgs::Float64>
         ("/board_arm/joint2_position_controller/command", 100)
         .expect("Failed to create joint2 command publisher");
 
+    rosrust::spin();
+    /*
     let stdin = io::stdin();
     let mut stdout = io::stdout();
-    let mut input = String::new();
+
+    let read_input = || -> Result<i8, ParseIntError> {
+        let mut buffer = String::new();
+        stdin.read_line(&mut buffer).unwrap();
+        buffer[..buffer.len()-1].parse::<i8>()
+    };
 
     while rosrust::is_ok() {
         // Read in desired position
         print!("start x1: ");
         stdout.flush()?;
-        stdin.read_line(&mut input)?;
-        let start1 = input[..input.len()-1].parse::<i8>();
-        if let Err(_) = start1 {
-            println!("Invalid float; terminating");
-            break;
-        }
-        input.clear();
+        let start1 = match read_input() {
+            Ok(i) => i,
+            Err(_) => { break; }
+        };
 
         print!("start x2: ");
         stdout.flush()?;
-        stdin.read_line(&mut input)?;
-        let start2 = input[..input.len()-1].parse::<i8>();
-        if let Err(_) = start2 {
-            println!("Invalid float; terminating");
-            break;
-        }
-        input.clear();
+        let start2 = match read_input() {
+            Ok(i) => i,
+            Err(_) => { eprintln!("Error"); break; }
+        };
 
         print!("end x1: ");
         stdout.flush()?;
-        stdin.read_line(&mut input)?;
-        let end1 = input[..input.len()-1].parse::<i8>();
-        if let Err(_) = end1 {
-            println!("Invalid float; terminating");
-            break;
-        }
-        input.clear();
+        let end1 = match read_input() {
+            Ok(i) => i,
+            Err(_) => { break; }
+        };
 
         print!("end x2: ");
         stdout.flush()?;
-        stdin.read_line(&mut input)?;
-        let end2 = input[..input.len()-1].parse::<i8>();
-        if let Err(_) = end2 {
-            println!("Invalid float; terminating");
-            break;
-        }
+        let end2 = match read_input() {
+            Ok(i) => i,
+            Err(_) => { break; }
+        };
 
         let path = find_path(
-            (start1.unwrap(), start2.unwrap()),
-            (end1.unwrap(), end2.unwrap())
+            (start1, start2),
+            (end1, end2)
         );
 
         let (lock, cvar) = &*dist_criteria;
         for position in path {
             println!("Position: {}", position);
             let config = inverse_kinematics(position);
-            let mut j1_msg = Float64::default();
-            let mut j2_msg = Float64::default();
+            let mut j1_msg = std_msgs::Float64::default();
+            let mut j2_msg = std_msgs::Float64::default();
             j1_msg.data = config.x1;
             j2_msg.data = config.x2;
             j1_pub.send(j1_msg).unwrap();
@@ -240,7 +279,6 @@ fn main() -> io::Result<()> {
             // Wait for arm to be sufficiently close to commanded position
             println!("Blocking!");
             let _guard = cvar.wait_while(lock.lock().unwrap(), |pending| {
-                println!("({}, {})", (*pending).0, (*pending).1);
                 if (*pending).0 && (*pending).1 {
                     (*pending).0 = false;
                     (*pending).1 = false;
@@ -250,9 +288,11 @@ fn main() -> io::Result<()> {
                 }
             }).unwrap();
             println!("Unblocking!");
+            sleep(Duration::from_seconds(1));
         }
         break;
     }
+    */
 
     Ok(())
 }

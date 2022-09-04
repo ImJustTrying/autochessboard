@@ -9,4 +9,4 @@ edition = "2018"
 rosrust = "0.9"
 rosrust_msg = "0.1"
 repl-rs = "0.2"
-chess = { path = "../chess" }
+chess = "3.2"
