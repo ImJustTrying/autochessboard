@@ -347,11 +347,6 @@ fn main() -> Result<(), Error> {
                 context.pending_flag = false;
                 let last_move = game_state.moves
                     .split(' ').last().unwrap();
-                let first_move = game_state.moves
-                    .split(' ').first().unwrap();
-                println!("{}", first_move);
-                println!("{}", last_move);
-                
                 let m = ChessMove::from_san(
                     &context.game.current_position(),
                     last_move
