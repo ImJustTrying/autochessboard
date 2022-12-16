@@ -1,0 +1,1 @@
+rosrust::rosmsg_include!(lichess_api/ChallengeAI, lichess_api/StreamGameState, lichess_api/Abort, lichess_api/Resign, lichess_api/MakeMove, lichess_api/GameEvent, board_arm_control/MakeMove, autochessboard/BoardGradient);

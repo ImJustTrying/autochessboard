@@ -1,3 +1,4 @@
 string move
 ---
 bool success
+string error

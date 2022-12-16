@@ -7,7 +7,9 @@
       output="screen" ns="/board_arm" args="joint1_position_controller joint2_position_controller joint_state_controller"/>
 
     <!-- convert joint states to TF transforms for rviz, etc -->
+    <!--
     <node name="state_pub" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
         <remap from="/joint_states" to="/board_arm/joint_states"/>
     </node>
+    -->
 </launch>

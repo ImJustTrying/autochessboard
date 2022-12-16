@@ -7,6 +7,6 @@ edition = "2018"
 
 [dependencies]
 rosrust = "0.9"
-rosrust_msg = "0.1"
+#rosrust_msg = "0.1"
 repl-rs = "0.2"
-chess = { path = "../chess" }
+chess = "3.2"
