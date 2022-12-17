@@ -1,3 +1,9 @@
+"""
+Source code adapted from:
+https://github.com/curiores/ArduinoTutorials/tree/main/encoderControl/part4_NoAtomic
+which was our reference for PID motor control on the Arduino.
+"""
+
 import Adafruit_BBIO.GPIO as gpio
 import Adafruit_BBIO.PWM as pwm
 from time import sleep
